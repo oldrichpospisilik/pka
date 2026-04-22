@@ -115,9 +115,15 @@ Tři místa kam házíš raw vstupy pro ingest do wiki:
 
 Claude při ingestu zkontroluje všechna tři místa.
 
-## Dependencies
+## Setup na novém stroji
 
 ```bash
-npm install          # playwright, dotenv
+git clone https://github.com/oldrichpospisilik/pka.git ~/wiki
+cd ~/wiki
+cp .env.example .env             # vyplnit ČSFD credentials (přezdívka + heslo)
+npm install                      # playwright, dotenv
 npx playwright install firefox   # browser pro ČSFD skripty (Chromium blokuje BotStopper)
+./start.sh                       # namountuje pCloud, zkontroluje vše, spustí Claude Code
 ```
+
+Předpoklady: Node.js, pCloud nainstalovaný ve Windows, WSL.
