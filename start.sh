@@ -144,6 +144,45 @@ fi
 echo -e "${GREEN}Všechno OK.${NC}"
 echo ""
 
+# --- Start Pekáček bridge (for Chrome extension) ---
+BRIDGE_SCRIPT="$WIKI_DIR/tools/pekacek-extension/bridge.mjs"
+BRIDGE_PORT=3888
+BRIDGE_LOG="/tmp/pekacek-bridge.log"
+BRIDGE_PID_FILE="/tmp/pekacek-bridge.pid"
+
+if [ -f "$BRIDGE_SCRIPT" ]; then
+    # Check if bridge already running (port responds)
+    if curl -s -o /dev/null -m 1 "http://localhost:$BRIDGE_PORT/status" 2>/dev/null; then
+        existing_pid=""
+        [ -f "$BRIDGE_PID_FILE" ] && existing_pid=$(cat "$BRIDGE_PID_FILE" 2>/dev/null)
+        ok "Pekáček bridge už běží (port $BRIDGE_PORT${existing_pid:+, PID $existing_pid})"
+    else
+        # Clean stale PID file
+        rm -f "$BRIDGE_PID_FILE"
+        # Start in background, detached from shell
+        nohup node "$BRIDGE_SCRIPT" >"$BRIDGE_LOG" 2>&1 &
+        bridge_pid=$!
+        echo "$bridge_pid" > "$BRIDGE_PID_FILE"
+        disown "$bridge_pid" 2>/dev/null || true
+
+        # Wait briefly for startup
+        for i in 1 2 3 4 5; do
+            sleep 0.3
+            if curl -s -o /dev/null -m 1 "http://localhost:$BRIDGE_PORT/status" 2>/dev/null; then
+                ok "Pekáček bridge spuštěn (PID $bridge_pid, log: $BRIDGE_LOG)"
+                break
+            fi
+            if [ $i -eq 5 ]; then
+                warn "Bridge se nenastartoval — zkontroluj $BRIDGE_LOG"
+            fi
+        done
+    fi
+else
+    warn "Bridge script nenalezen ($BRIDGE_SCRIPT) — Chrome extension nebude fungovat"
+fi
+
+echo ""
+
 # --- Start Claude Code ---
 cd "$WIKI_DIR"
 

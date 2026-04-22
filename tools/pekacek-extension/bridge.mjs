@@ -81,6 +81,18 @@ const server = http.createServer(async (req, res) => {
     }));
   }
 
+  // Forget cached article (on reset)
+  if (req.method === "POST" && req.url.startsWith("/forget")) {
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const pageUrl = url.searchParams.get("url");
+    if (pageUrl) {
+      const existed = articleCache.delete(pageUrl);
+      process.stderr.write(`[bridge] FORGET ${pageUrl} (${existed ? "removed" : "not cached"})\n`);
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    return res.end(JSON.stringify({ ok: true }));
+  }
+
   // Main endpoint — SSE streaming
   if (req.method === "POST" && req.url === "/ask") {
     let body = "";

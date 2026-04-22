@@ -6,12 +6,16 @@
   "permissions": [
     "sidePanel",
     "activeTab",
+    "tabs",
     "storage",
     "bookmarks",
-    "scripting"
+    "scripting",
+    "alarms"
   ],
   "host_permissions": [
-    "http://localhost:3888/*"
+    "http://localhost:3888/*",
+    "http://localhost:3777/*",
+    "<all_urls>"
   ],
   "side_panel": {
     "default_path": "sidebar/sidebar.html"
@@ -27,8 +31,7 @@
     }
   ],
   "action": {
-    "default_title": "Pekacek",
-    "default_popup": "popup/popup.html"
+    "default_title": "Pekacek — klik otevre sidebar, pravy klik > Moznosti"
   },
   "options_ui": {
     "page": "options/options.html",

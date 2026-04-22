@@ -43,6 +43,37 @@ setTimeout(() => {
 // Get tab info and offer to read (no content script needed)
 setTimeout(() => loadTabInfo(), 500);
 
+// Reset button
+document.getElementById("reset-btn").addEventListener("click", () => {
+  resetChat();
+});
+
+function resetChat() {
+  // Tell bridge to forget cached session for current URL (before clearing state)
+  const urlToForget = currentPageContent?.url || lastReadUrl;
+  if (urlToForget) {
+    fetch(`${BRIDGE_URL}/forget?url=${encodeURIComponent(urlToForget)}`, { method: "POST" })
+      .catch(() => {});
+  }
+
+  // Clear messages
+  messagesEl.innerHTML = "";
+  messageCounter = 0;
+
+  // Forget article state
+  articleRead = false;
+  lastReadUrl = null;
+  currentPageContent = null;
+
+  hideNewMessagesButton();
+  statusText.textContent = "Pripraveny";
+  statusText.style.color = "";
+  tempFace("chill", "animate-idle", 1500);
+
+  // Re-offer reading after brief delay
+  setTimeout(() => loadTabInfo(), 400);
+}
+
 // --- Bridge status ---
 function checkBridgeStatus() {
   chrome.runtime.sendMessage({ type: "check-bridge" }, (res) => {
@@ -143,20 +174,43 @@ function stopIdleLife() {
 }
 
 // --- Tab Info (always works, no content script needed) ---
-function loadTabInfo() {
+function loadTabInfo(retryCount = 0) {
   chrome.runtime.sendMessage({ type: "get-tab-info" }, (res) => {
-    if (res && !res.error) {
-      pageIndicator.textContent = truncate(res.title, 35);
-
-      // New page? Offer to read
-      if (!articleRead && res.url !== lastReadUrl) {
-        const skipPatterns = ["google.com/search", "youtube.com", "github.com", "localhost", "chrome://", "chrome-extension://", "about:"];
-        if (!skipPatterns.some(p => res.url.includes(p))) {
-          offerToRead(res.title, res.url);
-        }
-      }
-    } else {
+    if (!res || res.error) {
       pageIndicator.textContent = "—";
+      return;
+    }
+
+    let title = (res.title || "").trim();
+    const url = res.url || "";
+
+    // If title is empty but URL exists, tab may still be loading — retry 1-2x
+    if (!title && url && !url.startsWith("chrome://") && retryCount < 2) {
+      setTimeout(() => loadTabInfo(retryCount + 1), 400);
+      return;
+    }
+
+    // Fallback: use URL hostname if title still missing
+    if (!title && url) {
+      try {
+        title = new URL(url).hostname.replace(/^www\./, "");
+      } catch {}
+    }
+
+    pageIndicator.textContent = title ? truncate(title, 35) : "—";
+
+    // Offer to read
+    if (!articleRead && url && url !== lastReadUrl) {
+      const skipPatterns = [
+        "google.com/search",
+        "chrome://",
+        "chrome-extension://",
+        "about:",
+        "newtab",
+      ];
+      if (!skipPatterns.some((p) => url.includes(p))) {
+        offerToRead(title || "tato stránka", url);
+      }
     }
   });
 }
@@ -170,7 +224,8 @@ function extractPageContent() {
         statusText.textContent = `${(res.length / 1000).toFixed(1)}k znaku`;
         resolve(res);
       } else {
-        resolve(null);
+        console.error("[Pekacek] extractPageContent error:", res?.error);
+        resolve({ __error: res?.error || "Unknown error" });
       }
     });
   });
@@ -213,8 +268,11 @@ async function readArticle(title, url) {
 
   // Now extract content (content script runs here)
   const page = await extractPageContent();
-  if (!page) {
-    addMessage("pekacek", "Nepodarilo se precist obsah stranky. Zkus refreshnout stranku a znovu otevrit sidebar.");
+  if (!page || page.__error) {
+    const errDetail = page?.__error ? `\n\nDetail: ${page.__error}` : "";
+    addMessage("pekacek",
+      `Nepodarilo se precist obsah stranky. Zkus refreshnout stranku (F5) a znovu otevrit sidebar.${errDetail}`
+    );
     tempFace("worried", "animate-error");
     return;
   }
@@ -226,7 +284,7 @@ async function readArticle(title, url) {
     `a jestli s necim nesouhlasis nebo ti neco chybi.\n\n` +
     `Obsah clanku:\n${page.text}`;
 
-  await sendToBridge(prompt, { saveArticle: true, articleTitle: title });
+  await sendToBridge(prompt, { saveArticle: true, articleTitle: title, action: "read" });
 
   articleRead = true;
   lastReadUrl = url;
@@ -311,7 +369,7 @@ document.getElementById("actions").addEventListener("click", (e) => {
       wiki: "Kam to patri ve wiki?",
     };
     addMessage("user", labels[action]);
-    sendToBridge(userMsg);
+    sendToBridge(userMsg, { action });
   });
 });
 
@@ -352,7 +410,7 @@ async function handleIngest() {
     `urcil kategorii, vytvor wiki stranku, propoj s existujicimi strankami, aktualizuj index.md a log.md.\n\n` +
     `Stranka: "${currentPageContent.title}"\nURL: ${currentPageContent.url}\n\nObsah:\n${currentPageContent.text}`;
 
-  sendToBridge(prompt);
+  sendToBridge(prompt, { action: "ingest" });
 }
 
 // --- Chat ---
@@ -387,12 +445,62 @@ function handleUserMessage() {
 // --- Bridge communication (SSE streaming) ---
 const BRIDGE_URL = "http://localhost:3888";
 
+// Contextual thinking messages per action
+const THINKING_MESSAGES = {
+  summarize:  ["Shrnuju...", "Filtruju podstatu...", "Hledám hlavní linii...", "Skládám dohromady..."],
+  counter:    ["Hledám slabiny...", "Vrtám do argumentů...", "Co tam chybí?...", "Zkouším protiargumenty..."],
+  experiment: ["Vymýšlím experimenty...", "Jak to ověřit?...", "Hledám způsoby...", "Co bys mohl zkusit?..."],
+  analogy:    ["Hledám přirovnání...", "Z které domény?...", "Je to jako když...", "Stavím analogii..."],
+  diagram:    ["Kreslím diagram...", "Rozkládám koncepty...", "Jaká struktura?...", "Formátuju ASCII..."],
+  eli5:       ["Zjednodušuju...", "Hledám správná slova...", "Tak aby to dítě pochopilo...", "Bez žargonu..."],
+  wiki:       ["Prohledávám wiki...", "Kam to patří?...", "Hledám souvislosti...", "Propojuju s existujícím..."],
+  ingest:     ["Čtu článek...", "Určuju kategorii...", "Vytvářím stránku...", "Propojuju s wiki..."],
+  read:       ["Čtu článek...", "Zpracovávám myšlenky...", "Formuluju názor...", "Hledám zajímavé...", "Skoro hotovo..."],
+  default:    ["Přemýšlím...", "Ještě chvilku...", "Skoro to mám...", "Formuluju..."],
+};
+
+const THINKING_FACES = ["thinking", "curious", "determined", "thinking", "reading"];
+
+let thinkingRotation = null;
+
+function startThinkingMessages(action) {
+  const msgs = THINKING_MESSAGES[action] || THINKING_MESSAGES.default;
+  let idx = 0;
+  let faceIdx = 0;
+
+  statusText.textContent = msgs[0];
+  statusText.style.color = "#ffd369";
+
+  // Rotate messages every 4-6 seconds, faces every 2.5s
+  thinkingRotation = setInterval(() => {
+    idx = (idx + 1) % msgs.length;
+    statusText.textContent = msgs[idx];
+  }, 4500);
+
+  // Face cycling (separate interval, faster)
+  const faceInterval = setInterval(() => {
+    if (!isWorking) {
+      clearInterval(faceInterval);
+      return;
+    }
+    faceIdx = (faceIdx + 1) % THINKING_FACES.length;
+    const anim = faceIdx % 2 === 0 ? "animate-thinking" : "animate-idle";
+    setFace(THINKING_FACES[faceIdx], anim);
+  }, 2800);
+}
+
+function stopThinkingMessages() {
+  if (thinkingRotation) {
+    clearInterval(thinkingRotation);
+    thinkingRotation = null;
+  }
+}
+
 async function sendToBridge(prompt, extra = {}) {
   isWorking = true;
   stopIdleLife();
   setFace("thinking", "animate-thinking");
-  statusText.textContent = "Claude premysli...";
-  statusText.style.color = "#ffd369";
+  startThinkingMessages(extra.action);
 
   // Create empty message that we'll fill with streamed tokens
   const msgId = addMessage("pekacek", "", true);
@@ -441,11 +549,16 @@ async function sendToBridge(prompt, extra = {}) {
           const event = JSON.parse(line.slice(6));
 
           if (event.type === "token") {
+            // First token: stop thinking rotation, switch to "reading" mode
+            if (!fullText) {
+              stopThinkingMessages();
+              statusText.textContent = "Odpovídá...";
+              statusText.style.color = "#4ecca3";
+              setFace("reading", "animate-idle");
+            }
             fullText += event.text;
             contentEl.innerHTML = formatMessage(fullText);
             scrollToBottom();
-            // Switch to reading face after first tokens
-            if (fullText.length < 50) setFace("reading", "animate-idle");
           } else if (event.type === "tool") {
             // Tool use indicator
             const toolLabels = {
@@ -461,6 +574,7 @@ async function sendToBridge(prompt, extra = {}) {
             statusText.textContent = `${label}...`;
             statusText.style.color = "#ffd369";
           } else if (event.type === "error") {
+            stopThinkingMessages();
             contentEl.innerHTML = formatMessage(`Chyba: ${event.error}`);
             tempFace("worried", "animate-error");
             statusText.textContent = "Chyba";
@@ -480,6 +594,7 @@ async function sendToBridge(prompt, extra = {}) {
     }
 
     isWorking = false;
+    stopThinkingMessages();
     tempFace("happy", "animate-happy", 1500);
     statusText.textContent = "Hotovo";
     statusText.style.color = "#4ecca3";
@@ -490,6 +605,7 @@ async function sendToBridge(prompt, extra = {}) {
 
   } catch (err) {
     isWorking = false;
+    stopThinkingMessages();
     startIdleLife();
     contentEl.innerHTML = formatMessage(
       err.message.includes("Failed to fetch")
@@ -522,7 +638,9 @@ function addMessage(role, content, isLoading = false) {
 
   div.appendChild(contentDiv);
   messagesEl.appendChild(div);
-  scrollToBottom();
+  // Force scroll for user messages (they just sent it)
+  // For pekacek messages, force scroll too if user was near bottom before
+  scrollToBottom(role === "user");
   return id;
 }
 
@@ -541,10 +659,78 @@ function formatMessage(text) {
     .replace(/\n/g, "<br>");
 }
 
-function scrollToBottom() {
+// --- Smart scroll ---
+// Auto-scroll only if user is near bottom. Otherwise show "new messages" button.
+const SCROLL_THRESHOLD = 60; // px from bottom to consider "at bottom"
+
+function isNearBottom() {
   const chat = document.getElementById("chat");
-  chat.scrollTop = chat.scrollHeight;
+  return chat.scrollHeight - chat.scrollTop - chat.clientHeight < SCROLL_THRESHOLD;
 }
+
+function scrollToBottom(force = false) {
+  const chat = document.getElementById("chat");
+  if (force || isNearBottom()) {
+    chat.scrollTop = chat.scrollHeight;
+    hideNewMessagesButton();
+  } else {
+    showNewMessagesButton();
+  }
+}
+
+// "New messages ↓" button
+let newMsgBtn = null;
+
+function ensureNewMessagesButton() {
+  if (newMsgBtn) return newMsgBtn;
+  newMsgBtn = document.createElement("button");
+  newMsgBtn.id = "new-messages-btn";
+  newMsgBtn.textContent = "↓ Nové zprávy";
+  newMsgBtn.style.cssText = `
+    position: fixed;
+    bottom: 72px;
+    left: 50%;
+    transform: translateX(-50%) translateY(10px);
+    padding: 6px 14px;
+    border: 1px solid #4ecca3;
+    border-radius: 16px;
+    background: #0f3460;
+    color: #4ecca3;
+    font-size: 12px;
+    font-family: "Segoe UI", system-ui, sans-serif;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+    z-index: 100;
+    white-space: nowrap;
+  `;
+  newMsgBtn.addEventListener("click", () => {
+    scrollToBottom(true);
+  });
+  document.body.appendChild(newMsgBtn);
+  return newMsgBtn;
+}
+
+function showNewMessagesButton() {
+  const btn = ensureNewMessagesButton();
+  btn.style.opacity = "1";
+  btn.style.transform = "translateX(-50%) translateY(0)";
+  btn.style.pointerEvents = "auto";
+}
+
+function hideNewMessagesButton() {
+  if (!newMsgBtn) return;
+  newMsgBtn.style.opacity = "0";
+  newMsgBtn.style.transform = "translateX(-50%) translateY(10px)";
+  newMsgBtn.style.pointerEvents = "none";
+}
+
+// Hide button if user manually scrolls to bottom
+document.getElementById("chat").addEventListener("scroll", () => {
+  if (isNearBottom()) hideNewMessagesButton();
+});
 
 function truncate(str, len) {
   return str.length > len ? str.slice(0, len) + "..." : str;

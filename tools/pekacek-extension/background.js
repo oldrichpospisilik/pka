@@ -1,12 +1,100 @@
 // Pekacek Extension v2.0 — Background Service Worker
 // Komunikuje s Claude Code pres lokalni bridge (WSL)
+//
+// Dva lokalni servery:
+//   :3888 — Pekacek bridge (sidebar → Claude Code)
+//   :3777 — Chrome Bookmarks MCP bridge (long-poll pro write operace zalozek)
 
 const BRIDGE_URL = "http://localhost:3888";
+const BOOKMARKS_MCP_URL = "http://localhost:3777";
 
-// Open side panel on extension icon click
-chrome.action.onClicked.addListener(async (tab) => {
-  await chrome.sidePanel.open({ tabId: tab.id });
+// Toggle sidepanel on extension icon click (Chrome native behavior)
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.sidePanel
+    .setPanelBehavior({ openPanelOnActionClick: true })
+    .catch((err) => console.error("setPanelBehavior failed:", err));
 });
+chrome.runtime.onStartup.addListener(() => {
+  chrome.sidePanel
+    .setPanelBehavior({ openPanelOnActionClick: true })
+    .catch(() => {});
+});
+
+// --- Chrome Bookmarks MCP bridge (long-poll) ---
+// Keeps service worker alive with alarm, long-polls MCP server for commands.
+
+chrome.alarms.create("bookmarks-reconnect", { periodInMinutes: 0.5 });
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === "bookmarks-reconnect") bookmarksLongPoll();
+});
+chrome.runtime.onInstalled.addListener(() => bookmarksLongPoll());
+chrome.runtime.onStartup.addListener(() => bookmarksLongPoll());
+
+let bookmarksPolling = false;
+
+async function bookmarksLongPoll() {
+  if (bookmarksPolling) return;
+  bookmarksPolling = true;
+
+  try {
+    const res = await fetch(`${BOOKMARKS_MCP_URL}/poll`);
+    if (res.status === 200) {
+      const command = await res.json();
+      const result = await executeBookmarksCommand(command);
+      await fetch(`${BOOKMARKS_MCP_URL}/result`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(result),
+      });
+    }
+    // 204 = timeout, reconnect
+  } catch {
+    // Server not running — wait before retry
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+
+  bookmarksPolling = false;
+  bookmarksLongPoll();
+}
+
+async function executeBookmarksCommand(cmd) {
+  try {
+    switch (cmd.action) {
+      case "createBookmark":
+        return await chrome.bookmarks.create({
+          title: cmd.title,
+          url: cmd.url,
+          parentId: cmd.parentId || "1",
+        });
+      case "createFolder":
+        return await chrome.bookmarks.create({
+          title: cmd.title,
+          parentId: cmd.parentId || "1",
+        });
+      case "move":
+        return await chrome.bookmarks.move(cmd.bookmarkId, {
+          parentId: cmd.parentId,
+          ...(cmd.index !== undefined && { index: cmd.index }),
+        });
+      case "delete":
+        await chrome.bookmarks.remove(cmd.bookmarkId);
+        return { success: true, deletedId: cmd.bookmarkId };
+      case "update": {
+        const changes = {};
+        if (cmd.title) changes.title = cmd.title;
+        if (cmd.url) changes.url = cmd.url;
+        return await chrome.bookmarks.update(cmd.bookmarkId, changes);
+      }
+      default:
+        return { error: `Unknown action: ${cmd.action}` };
+    }
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
+// Start polling immediately (for existing service worker instances)
+bookmarksLongPoll();
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === "open-sidepanel") {
@@ -34,22 +122,46 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === "get-page-content") {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (!tabs[0]) return sendResponse({ error: "No active tab" });
-      chrome.tabs.sendMessage(tabs[0].id, { type: "extract-content" }, (res) => {
-        if (chrome.runtime.lastError || !res) {
-          // Content script not injected — inject it now and retry
-          chrome.scripting.executeScript(
-            { target: { tabId: tabs[0].id }, files: ["content.js"] },
-            () => {
-              setTimeout(() => {
-                chrome.tabs.sendMessage(tabs[0].id, { type: "extract-content" }, (res2) => {
-                  sendResponse(res2 || { error: "Content script failed" });
-                });
-              }, 300);
-            }
-          );
-        } else {
-          sendResponse(res);
+      const tab = tabs[0];
+      console.log("[Pekacek] get-page-content for tab", tab.id, tab.url);
+
+      chrome.tabs.sendMessage(tab.id, { type: "extract-content" }, (res) => {
+        const err = chrome.runtime.lastError;
+        if (!err && res) {
+          console.log("[Pekacek] content script responded, length:", res.length);
+          return sendResponse(res);
         }
+
+        console.log("[Pekacek] content script not available, injecting:", err?.message);
+        // Inject content script
+        chrome.scripting.executeScript(
+          { target: { tabId: tab.id }, files: ["content.js"] },
+          (injectionResults) => {
+            const injectErr = chrome.runtime.lastError;
+            if (injectErr) {
+              console.error("[Pekacek] inject failed:", injectErr.message);
+              return sendResponse({
+                error: `Nelze injektovat content script: ${injectErr.message}. Mozna je stranka chranena (chrome://, store, PDF...).`,
+              });
+            }
+            console.log("[Pekacek] injected, retrying extraction");
+            // Give content script time to register listener
+            setTimeout(() => {
+              chrome.tabs.sendMessage(tab.id, { type: "extract-content" }, (res2) => {
+                const err2 = chrome.runtime.lastError;
+                if (err2 || !res2) {
+                  console.error("[Pekacek] retry failed:", err2?.message);
+                  sendResponse({
+                    error: err2?.message || "Content script nereagoval po injekci",
+                  });
+                } else {
+                  console.log("[Pekacek] retry success, length:", res2.length);
+                  sendResponse(res2);
+                }
+              });
+            }, 500);
+          }
+        );
       });
     });
     return true;

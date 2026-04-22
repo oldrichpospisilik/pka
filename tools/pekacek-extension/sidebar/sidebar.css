@@ -41,6 +41,31 @@ body {
   border-bottom: 1px solid var(--text-muted);
   position: relative;
   overflow: hidden;
+  user-select: none;
+}
+
+#reset-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--text-muted);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+  z-index: 5;
+}
+
+#reset-btn:hover {
+  color: var(--green);
+  border-color: var(--green);
+  transform: rotate(-90deg);
 }
 
 #pekacek-face {
