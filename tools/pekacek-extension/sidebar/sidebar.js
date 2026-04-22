@@ -558,6 +558,7 @@ async function sendToBridge(prompt, extra = {}) {
             }
             fullText += event.text;
             contentEl.innerHTML = formatMessage(fullText);
+            msgEl.dataset.rawText = fullText;
             scrollToBottom();
           } else if (event.type === "tool") {
             // Tool use indicator
@@ -575,7 +576,9 @@ async function sendToBridge(prompt, extra = {}) {
             statusText.style.color = "#ffd369";
           } else if (event.type === "error") {
             stopThinkingMessages();
-            contentEl.innerHTML = formatMessage(`Chyba: ${event.error}`);
+            const errText = `Chyba: ${event.error}`;
+            contentEl.innerHTML = formatMessage(errText);
+            msgEl.dataset.rawText = errText;
             tempFace("worried", "animate-error");
             statusText.textContent = "Chyba";
             statusText.style.color = "#e94560";
@@ -637,9 +640,36 @@ function addMessage(role, content, isLoading = false) {
   }
 
   div.appendChild(contentDiv);
+
+  // Copy button for Pekáček messages (not for loading state or user)
+  if (role === "pekacek") {
+    // Store raw text for clipboard (updated during streaming)
+    div.dataset.rawText = isLoading ? "" : content;
+    const copyBtn = document.createElement("button");
+    copyBtn.className = "copy-btn";
+    copyBtn.title = "Zkopírovat do schránky";
+    copyBtn.textContent = "⧉";
+    copyBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const text = div.dataset.rawText || "";
+      if (!text.trim()) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        copyBtn.textContent = "✓";
+        copyBtn.classList.add("copied");
+        setTimeout(() => {
+          copyBtn.textContent = "⧉";
+          copyBtn.classList.remove("copied");
+        }, 1500);
+      } catch {
+        copyBtn.textContent = "✗";
+        setTimeout(() => { copyBtn.textContent = "⧉"; }, 1500);
+      }
+    });
+    div.appendChild(copyBtn);
+  }
+
   messagesEl.appendChild(div);
-  // Force scroll for user messages (they just sent it)
-  // For pekacek messages, force scroll too if user was near bottom before
   scrollToBottom(role === "user");
   return id;
 }

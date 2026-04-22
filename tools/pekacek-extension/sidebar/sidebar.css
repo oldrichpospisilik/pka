@@ -315,6 +315,43 @@ body {
   background: var(--bg-light);
   border: 1px solid var(--text-muted);
   border-bottom-left-radius: 2px;
+  position: relative;
+}
+
+.copy-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 4px;
+  background: rgba(78, 204, 163, 0.08);
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, background 0.15s, color 0.15s;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.message.pekacek:hover .copy-btn {
+  opacity: 1;
+}
+
+.copy-btn:hover {
+  background: rgba(78, 204, 163, 0.25);
+  color: var(--green);
+}
+
+.copy-btn.copied {
+  background: var(--green);
+  color: var(--bg);
+  opacity: 1;
 }
 
 .message.user {
