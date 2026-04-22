@@ -7,6 +7,12 @@
 
 set -euo pipefail
 
+# Load nvm & npm-global PATH (needed when run from Windows shortcut —
+# non-interactive shell doesn't source .bashrc)
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+export PATH="$HOME/.npm-global/bin:$PATH"
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'

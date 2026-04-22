@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="sidebar.css">
+</head>
+<body>
+  <!-- Pekacek avatar -->
+  <div id="pekacek-avatar">
+    <div id="pekacek-face" class="animate-idle">
+  ( o_o)
+  /|___|\
+   / \</div>
+  </div>
+
+  <!-- Status bar -->
+  <div id="status-bar">
+    <span id="status-text">Pripraveny</span>
+    <span id="page-indicator"></span>
+  </div>
+
+  <!-- Quick actions -->
+  <div id="actions">
+    <button class="action-btn" data-action="summarize" title="Souhrn stranky">
+      <span class="btn-icon">&#x1F4CB;</span> Souhrn
+    </button>
+    <button class="action-btn" data-action="counter" title="Protimyslenky">
+      <span class="btn-icon">&#x1F914;</span> Proti
+    </button>
+    <button class="action-btn" data-action="experiment" title="Experimenty k vyzkouseni">
+      <span class="btn-icon">&#x1F52C;</span> Zkus
+    </button>
+    <button class="action-btn" data-action="analogy" title="Vysvetli pomoci analogii a jednoduchych prikladu">
+      <span class="btn-icon">&#x1F4A1;</span> Analogie
+    </button>
+    <button class="action-btn" data-action="diagram" title="Nakresli ASCII diagram konceptu">
+      <span class="btn-icon">&#x1F4CA;</span> Diagram
+    </button>
+    <button class="action-btn" data-action="eli5" title="Vysvetli jako patiletemu">
+      <span class="btn-icon">&#x1F476;</span> ELI5
+    </button>
+    <button class="action-btn" data-action="wiki" title="Propojeni s wiki">
+      <span class="btn-icon">&#x1F517;</span> Wiki
+    </button>
+    <button class="action-btn action-ingest" data-action="ingest" title="Ingestuj primo do wiki">
+      <span class="btn-icon">&#x1F4DA;</span> Ingest
+    </button>
+    <button class="action-btn action-save" data-action="save" title="Ulozit do _raw zalozek">
+      <span class="btn-icon">&#x1F4BE;</span> Raw
+    </button>
+  </div>
+
+  <!-- Chat area -->
+  <div id="chat">
+    <div id="messages">
+      <div class="message pekacek">
+        <div class="message-content">
+          Ahoj! Otevri clanek a klikni na neco — nebo se me rovnou zeptej.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Input -->
+  <div id="input-area">
+    <textarea id="user-input" placeholder="Zeptej se Pekacka..." rows="2"></textarea>
+    <button id="send-btn" title="Odeslat">&#x27A4;</button>
+  </div>
+
+  <script src="sidebar.js"></script>
+</body>
+</html>

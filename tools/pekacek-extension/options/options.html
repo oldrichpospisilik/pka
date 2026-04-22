@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      width: 350px;
+      padding: 20px;
+      background: #1a1a2e;
+      color: #eee;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      font-size: 13px;
+    }
+    h2 { font-size: 15px; color: #4ecca3; margin: 0 0 4px; }
+    .subtitle { color: #888; font-size: 11px; margin-bottom: 16px; }
+    label { display: block; margin: 12px 0 4px; color: #ffd369; font-size: 12px; }
+    input {
+      width: 100%; padding: 8px 10px; border: 1px solid #555; border-radius: 6px;
+      background: #16213e; color: #eee; font-family: "Cascadia Code", monospace;
+      font-size: 12px; outline: none;
+    }
+    input:focus { border-color: #4ecca3; }
+    button {
+      margin-top: 14px; padding: 8px 20px; border: none; border-radius: 6px;
+      background: #4ecca3; color: #1a1a2e; font-size: 13px; font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { background: #5dddb5; }
+    #status { margin-top: 10px; font-size: 12px; min-height: 18px; }
+    .hint { font-size: 11px; color: #666; margin-top: 4px; }
+    .status-box {
+      margin-top: 16px; padding: 10px; border-radius: 6px;
+      background: #16213e; border: 1px solid #555;
+    }
+    .status-box .dot {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      margin-right: 6px;
+    }
+    .dot-online { background: #4ecca3; }
+    .dot-offline { background: #e94560; }
+  </style>
+</head>
+<body>
+  <h2>Pekacek — Nastaveni</h2>
+  <div class="subtitle">Reading Companion v2.0 (lokalni bridge)</div>
+
+  <label for="bridgeUrl">Bridge URL</label>
+  <input type="text" id="bridgeUrl" placeholder="http://localhost:3888">
+  <div class="hint">Adresa bridge serveru ve WSL. Spust: node tools/pekacek-extension/bridge.mjs</div>
+
+  <button id="save">Ulozit</button>
+  <div id="status"></div>
+
+  <div class="status-box">
+    <span class="dot" id="statusDot"></span>
+    <span id="bridgeStatus">Kontroluji...</span>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>

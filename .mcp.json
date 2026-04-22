@@ -3,6 +3,10 @@
     "csfd": {
       "command": "npx",
       "args": ["-y", "node-csfd-api", "mcp"]
+    },
+    "chrome-bookmarks": {
+      "command": "node",
+      "args": ["/home/oposp/wiki/tools/chrome-bookmarks-mcp/mcp-server.js"]
     }
   }
 }

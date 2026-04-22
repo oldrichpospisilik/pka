@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      width: 260px;
+      padding: 12px;
+      font-family: system-ui, sans-serif;
+      font-size: 13px;
+      color: #333;
+    }
+    h3 { margin: 0 0 8px; font-size: 14px; }
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 6px 0;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ccc;
+    }
+    .dot.green { background: #22c55e; }
+    .dot.red { background: #ef4444; }
+    .info { color: #888; font-size: 11px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h3>🍞 Pekáček Bookmarks</h3>
+  <div class="status">
+    <span id="dot" class="dot"></span>
+    <span id="label">Checking...</span>
+  </div>
+  <div class="info" id="info"></div>
+  <script src="popup.js"></script>
+</body>
+</html>

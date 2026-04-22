@@ -31,20 +31,46 @@ Když ti dám surový text, článek, myšlenku nebo odkaz — ty rozhodneš jak
 
 ## Na začátku konverzace
 
-Než odpovíš na první zprávu nové konverzace, **zkontroluj dvě věci** — události a články. Obojí krátce, jen pokud je tam něco relevantního. Žádná z kontrol → nic neříkej, nezdržuj.
+Než odpovíš na první zprávu nové konverzace, **zkontroluj tři věci** — události, emaily a články. Vše krátce, jen pokud je tam něco relevantního. Žádná z kontrol → nic neříkej, nezdržuj.
 
 ### A) Nadcházející události (≤ 14 dní)
 
-1. Grepni `wiki/` na frontmatter řádek `datum-udalosti:` (rg: `^datum-udalosti:`).
-2. Pro každou nalezenou stránku porovnej datum s dnešním (viz `currentDate` v systémovém kontextu).
-3. Pokud existují události **do 14 dní včetně** od dneška (i dnes), na úvod stručně upozorni. Formát:
-   > 📅 Za {X} dní ({YYYY-MM-DD}): {název} — viz [[cesta/k/stránce]].
+Pomocí `list_events` stáhni události z hlavního Google Calendáře pro následujících 14 dní.
 
-   Víc událostí → krátký seznam (1 řádek na událost).
+**Formát výpisu** (chronologicky):
+   > 📅 Za {X} dní ({YYYY-MM-DD}): {název}
+   > 📅 Za {X} dní ({YYYY-MM-DD} {HH:MM}): {název}
 
-**Formát data**: ISO 8601 (`YYYY-MM-DD`) ve YAML frontmatter. Viz `wiki/udalosti.md` a roadmapu [[lab/todo-udalosti-asistent]].
+   Víc událostí → krátký seznam (1 řádek na událost). Pokud je událost dnes, napiš "Dnes" místo "Za 0 dní".
 
-### B) Nepřečtené články (backlog ≥ 3)
+**Ukládání událostí — Google Calendar je primární zdroj:**
+- Když při ingestu nebo v konverzaci narazím na událost s konkrétním datem (release, deadline, akce, termín...), **vytvořím ji v Google Calendáři** přes `create_event`.
+- Wiki stránka k události může existovat dál (pro kontext, poznámky), ale **datum se neukládá do frontmatter** — zdrojem pravdy je kalendář.
+- Do description události přidej odkaz na wiki stránku, pokud existuje (např. `Viz wiki: gaming/homm-olden-era.md`).
+- Celodenní události: `allDay: true`. Časové události: konkrétní start/end.
+- Frontmatter `datum-udalosti:` ve wiki se už nepoužívá.
+
+### B) Nepřečtené emaily
+
+1. Pomocí `search_threads` vyhledej nepřečtené emaily (`is:unread -category:promotions -category:social`). Limit na posledních ~10.
+2. Pokud jsou nepřečtené, ukaž stručný přehled. Formát:
+   > 📧 **{X} nepřečtených emailů:**
+   > - **{odesílatel}** — {předmět} *(datum)*
+   > - ...
+
+3. Po výpisu nabídni akce:
+   > Co s nimi? Můžu: **sumarizovat** konkrétní mail, navrhnout **odpověď** (draft), **labelovat**, nebo **ignorovat**.
+
+**Pravidla:**
+- Nezobrazuj promo/social (ty filtruj přes query) pokud uživatel neřekne jinak.
+- Nikdy neodesílej email bez explicitního potvrzení — vždy vytvoř **draft**, uživatel schválí a odešle z Gmailu.
+- Pokud je inbox čistý (0 nepřečtených), **nezmiňuj** — je to normální stav.
+
+**Omezení Gmail MCP (read-only scope):**
+- Umím: hledat, číst vlákna, vytvářet drafty, přiřazovat custom labely.
+- **Neumím**: označit jako přečtené/nepřečtené, přesunout do spamu/koše, odesílat. Tyto akce musí uživatel udělat sám v Gmailu.
+
+### C) Nepřečtené články (backlog ≥ 3)
 
 1. Grepni `wiki/clanky/` na frontmatter řádek `status: chci-precist` (rg: `^status: chci-precist` nebo obdobně).
 2. Spočítej kolik jich je. Pokud je to **3 a víc**, zmiň to na úvod:
@@ -56,7 +82,7 @@ Viz roadmapa [[lab/clanky-feed-asistent]] pro další fáze (RSS trigger, ranní
 
 ### Celková zpráva
 
-Pokud platí obojí, kombinuj do jedné úvodní části (nejdřív events, pak články), pak pokračuj odpovědí na uživatelův dotaz.
+Kombinuj do jedné úvodní části v pořadí: **události → emaily → články**. Pak pokračuj odpovědí na uživatelův dotaz. Pokud žádná kontrola nemá co hlásit, nezdržuj.
 
 ## Účel
 
@@ -70,12 +96,30 @@ raw/                    ← surové zdroje, nikdy nemodifikovat
                            Claude sám určí kategorii při ingestu
 ```
 
-Existují **tři** raw zdroje — při ingestu kontroluj všechny:
+Existují **čtyři** raw zdroje — při ingestu kontroluj všechny:
 1. WSL:                   `~/wiki/raw/`              (ručně házíš při práci v Claude Code)
 2. pCloud:                `/mnt/p/Wiki/raw/`         (ručně z telefonu, prohlížeče)
 3. Obsidian Web Clipper:  `/mnt/p/Wiki/Wiki/_raw/`   (automaticky z browser extension)
+4. Chrome záložky:        `_raw` složka v Bookmarks   (záložky z prohlížeče)
 
 **Workflow pro `_raw/`:** Během ingestu projdi i tuto složku. Po zpracování **přesuň všechny soubory odtud do `/mnt/p/Wiki/raw/`** (aby zůstaly jako trvalý zdroj vedle ostatních raw) a celou složku `_raw` následně **smaž** (`rmdir`) — Web Clipper si ji při příštím uložení vytvoří znova.
+
+**Workflow pro Chrome `_raw`:** Během ingestu přečti Chrome Bookmarks soubor (`/mnt/c/Users/oposp/AppData/Local/Google/Chrome/User Data/Default/Bookmarks`), najdi složku `_raw` podle jména a projdi všechny záložky. Pro každou urči typ podle URL a routuj:
+
+- **ČSFD odkaz** (`csfd.cz/film/`) → `node csfd-rate.mjs watchlist-add <url>`, po úspěchu smaž záložku.
+- **Článek / blog** (běžné URL) → `WebFetch` obsah, vytvoř stránku v `clanky/` (template s `status: chci-precist`), smaž záložku.
+- **YouTube video** (`youtube.com/watch`, `youtu.be/`) → `WebFetch` pro metadata (název, kanál), pak rozhodni:
+  - Film/seriál ke zhlédnutí → `csfd-rate.mjs watchlist-add` nebo wiki `kultura/filmy/`
+  - Vzdělávací obsah → wiki stránka v příslušné kategorii
+  - Hudba / meme / zábava → přeskoč, označ `[skip]` v názvu záložky
+  - Nejasné → zeptej se uživatele
+- **E-shop / produkt** → `nakupy/`
+- **Recept** → `recepty/`
+- **Ostatní** → `WebFetch`, vyhodnoť, routuj do wiki. Pokud není jasné kam → zeptej se.
+
+**Mazání z `_raw`:** Každou zpracovanou záložku smaž z Chrome Bookmarks JSON souboru (Python skript, viz vzor z batch operací). Složku `_raw` samotnou **nech** — uživatel do ní přidává průběžně.
+
+**Tip:** Bookmarks soubor se čte/zapisuje přímo (není potřeba MCP). Po zápisu Chrome změny načte při příštím restartu nebo refreshi.
 
 ```
 wiki/                   ← zpracované stránky udržované Claudem
@@ -192,7 +236,22 @@ Všechny podkategorie v `kultura/` používají Dataview plugin v Obsidianu pro 
 **Zdroj doporučení**:
 ```
 
-**ČSFD integrace**: MCP pro metadata + Playwright pro hodnocení a watchlist. Kompletní instrukce viz skill `csfd-tool/SKILL.md`, plán viz [[lab/csfd-mcp-integrace]].
+**ČSFD integrace** — dva nástroje, každý na jiné věci:
+
+1. **MCP (`mcp__csfd__*`)** — read-only metadata: `search` (najdi film → ID), `get_movie` (detail filmu), `get_user_ratings` / `get_user_reviews` (hodnocení/recenze uživatele). Watchlist neumí.
+2. **Playwright tool (`~/wiki/csfd-rate.mjs`)** — přihlašuje se na ČSFD a provádí akce vyžadující login:
+   ```bash
+   node csfd-rate.mjs watchlist [--all]           # stáhne "Chci vidět" seznam
+   node csfd-rate.mjs watchlist-add <url|id> [pozn]  # přidá film do Chci vidět
+   node csfd-rate.mjs watchlist-remove <url|id>    # odebere z Chci vidět
+   node csfd-rate.mjs rate <url|id> <1-5>          # ohodnotí film hvězdičkami
+   node csfd-rate.mjs check <url|id>               # zkontroluje aktuální hodnocení
+   ```
+   Credentials v `~/wiki/.env` (`CSFD_USERNAME`, `CSFD_PASSWORD`).
+
+**Workflow film → wiki**: MCP `search` → `get_movie` pro metadata → vytvoř wiki stránku v `kultura/filmy/`. Pro watchlist / hodnocení použij `csfd-rate.mjs`.
+
+Plán viz [[lab/csfd-mcp-integrace]].
 
 ### Knihy (`kultura/knihy/`)
 

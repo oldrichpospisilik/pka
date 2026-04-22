@@ -17,3 +17,11 @@ __pycache__/
 # Playwright state
 /tmp/
 *.png
+# … ale extension ikonky commitujeme
+!tools/pekacek-extension/icons/*.png
+
+# Chrome bookmarks backup (citlivá data)
+Bookmarks.backup.*
+
+# Lokální Claude Code nastavení (cesty specifické pro stroj)
+.claude/settings.local.json
