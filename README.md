@@ -1,4 +1,6 @@
-# Wiki workspace
+# PKA (Personal Knowledge Assistant)
+
+Familiárně **Pekáček**. Správce osobní wiki, knížek a audia na pCloudu, filmů na ČSFD a budoucí osobní asistent.
 
 Pracovní adresář pro Claude Code. Wiki obsah je na pCloudu, tady je CLAUDE.md, skripty a skills.
 
