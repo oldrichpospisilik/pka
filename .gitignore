@@ -10,6 +10,10 @@ node_modules/
 # Wiki obsah je na pCloudu, ne v gitu
 wiki
 
+# Python cache
+__pycache__/
+*.pyc
+
 # Playwright state
 /tmp/
 *.png
