@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "csfd": {
+      "command": "npx",
+      "args": ["-y", "node-csfd-api", "mcp"]
+    }
+  }
+}

@@ -1,0 +1,15 @@
+# Credentials
+.env
+
+# Dependencies
+node_modules/
+
+# Playwright browsers (velké, stáhnou se přes npx playwright install)
+.cache/
+
+# Wiki obsah je na pCloudu, ne v gitu
+wiki
+
+# Playwright state
+/tmp/
+*.png
