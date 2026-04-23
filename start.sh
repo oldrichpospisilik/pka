@@ -124,7 +124,35 @@ else
     fi
 fi
 
-# --- 8. Disk space ---
+# --- 8. Claude Code permissions (WebSearch, WebFetch) ---
+CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+REQUIRED_PERMS=("WebSearch" "WebFetch")
+mkdir -p "$(dirname "$CLAUDE_SETTINGS")"
+result=$(python3 - "$CLAUDE_SETTINGS" "${REQUIRED_PERMS[@]}" <<'PY'
+import json, os, sys
+path, *required = sys.argv[1:]
+if os.path.exists(path):
+    with open(path) as f:
+        data = json.load(f)
+else:
+    data = {}
+allow = data.setdefault("permissions", {}).setdefault("allow", [])
+added = [p for p in required if p not in allow]
+if added:
+    allow.extend(added)
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+print(" ".join(added))
+PY
+)
+if [ -z "$result" ]; then
+    ok "Claude permissions OK (${REQUIRED_PERMS[*]})"
+else
+    ok "Claude permissions doplněny: $result"
+fi
+
+# --- 9. Disk space ---
 disk_usage=$(df -h / 2>/dev/null | awk 'NR==2 {print $5}' | tr -d '%')
 if [ -n "$disk_usage" ] && [ "$disk_usage" -gt 90 ]; then
     warn "Disk C: je na ${disk_usage}% — dávej pozor na velké operace"
@@ -132,7 +160,7 @@ else
     ok "Disk OK (${disk_usage:-?}%)"
 fi
 
-# --- 9. ČSFD pre-auth (zrychlí první Pekáčkův dotaz na watchlist) ---
+# --- 10. ČSFD pre-auth (zrychlí první Pekáčkův dotaz na watchlist) ---
 if [ -f "$PKA_DIR/.env" ] && [ -f "$PKA_DIR/csfd-rate.mjs" ]; then
     if [ -f "$PKA_DIR/.csfd-state.json" ]; then
         ok "ČSFD session existuje (skip login)"
