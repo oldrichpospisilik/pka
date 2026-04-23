@@ -345,9 +345,37 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
+// --- Dropdown toggles ---
+function closeAllDropdowns() {
+  document.querySelectorAll(".dropdown-menu.open").forEach((m) => m.classList.remove("open"));
+  document.querySelectorAll(".dropdown-toggle.open").forEach((t) => t.classList.remove("open"));
+}
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".action-dropdown")) closeAllDropdowns();
+});
+
 // --- Actions ---
 document.getElementById("actions").addEventListener("click", (e) => {
-  const btn = e.target.closest(".action-btn");
+  // Dropdown toggle (Vysvětli ▾)
+  const toggle = e.target.closest(".dropdown-toggle");
+  if (toggle) {
+    const menu = document.getElementById(`dropdown-${toggle.dataset.dropdown}`);
+    const wasOpen = menu?.classList.contains("open");
+    closeAllDropdowns();
+    if (!wasOpen) {
+      menu?.classList.add("open");
+      toggle.classList.add("open");
+    }
+    return;
+  }
+
+  // Dropdown item selected — close menu, fall through to action dispatch
+  const item = e.target.closest(".dropdown-item");
+  if (item) {
+    closeAllDropdowns();
+  }
+
+  const btn = item || e.target.closest(".action-btn");
   if (!btn) return;
 
   const action = btn.dataset.action;
@@ -390,9 +418,12 @@ document.getElementById("actions").addEventListener("click", (e) => {
       eli5: hasContext
         ? `K tomu článku — vysvětli to jako pětiletému dítěti. Krátké věty, žádný odborný jazyk, konkrétní příklady z dětského světa. Ale zachovej jádro myšlenky.`
         : `Uživatel čte článek a chce úplně jednoduché vysvětlení. Vysvětli to jako bys to vysvětloval zvědavému pětiletému dítěti — krátké věty, žádný odborný jazyk, konkrétní příklady z dětského světa. Ale zachovej jádro myšlenky — ELI5 neznamená nepřesný.\n\n${pageCtx}\nObsah:\n${text}`,
-      wiki: hasContext
-        ? `K tomu článku — kam by patřil v naší wiki? Navrhni kategorii, název stránky, propojení s existujícími tématy. Máš přístup k wiki — podívej se co už tam je.`
-        : `Uživatel čte článek. Kam by patřil v naší wiki? Navrhni kategorii, název stránky, propojení s existujícími tématy. Máš přístup k wiki — podívej se co už tam je.\n\n${pageCtx}\nObsah:\n${text}`,
+      simplify: hasContext
+        ? `K tomu článku — vysvětli to laikovi. Bez odborného žargonu, ale plnohodnotně. Krátké srozumitelné věty, vysvětli termíny v závorkách při prvním použití. Cílová skupina: inteligentní dospělý člověk bez odborného backgroundu v oboru.`
+        : `Uživatel čte článek a chce srozumitelné vysvětlení bez odborného žargonu. Vysvětli to laikovi — plnohodnotně, ale bez expert-speak. Krátké srozumitelné věty, vysvětli termíny v závorkách při prvním použití. Cílová skupina: inteligentní dospělý člověk bez backgroundu v oboru.\n\n${pageCtx}\nObsah:\n${text}`,
+      technical: hasContext
+        ? `K tomu článku — vysvětli to odborně, s technickými detaily. Předpokládej, že uživatel má background v oboru. Používej přesnou terminologii, zmiň relevantní standardy, architektonické detaily, edge cases a trade-offs. Žádné zjednodušování.`
+        : `Uživatel čte článek a chce expertní vysvětlení. Vysvětli to odborně, s technickými detaily. Předpokládej background v oboru — přesná terminologie, relevantní standardy, architektonické detaily, edge cases a trade-offs. Žádné zjednodušování.\n\n${pageCtx}\nObsah:\n${text}`,
     };
 
     const userMsg = prompts[action];
@@ -405,7 +436,8 @@ document.getElementById("actions").addEventListener("click", (e) => {
       analogy: "Vysvětli pomocí analogií",
       diagram: "Nakresli diagram konceptu",
       eli5: "Vysvětli jako pětiletému",
-      wiki: "Kam to patří ve wiki?",
+      simplify: "Vysvětli zjednodušeně, bez žargonu",
+      technical: "Vysvětli odborně, s detaily",
     };
     addMessage("user", labels[action]);
     sendToBridge(userMsg, { action });
@@ -492,7 +524,8 @@ const THINKING_MESSAGES = {
   analogy:    ["Hledám přirovnání...", "Z které domény?...", "Je to jako když...", "Stavím analogii..."],
   diagram:    ["Kreslím diagram...", "Rozkládám koncepty...", "Jaká struktura?...", "Formátuju ASCII..."],
   eli5:       ["Zjednodušuju...", "Hledám správná slova...", "Tak aby to dítě pochopilo...", "Bez žargonu..."],
-  wiki:       ["Prohledávám wiki...", "Kam to patří?...", "Hledám souvislosti...", "Propojuju s existujícím..."],
+  simplify:   ["Odbourávám žargon...", "Hledám srozumitelná slova...", "Tak aby to pochopil každý...", "Vysvětluju v závorkách..."],
+  technical: ["Vytahuju detaily...", "Hledám přesné termíny...", "Edge cases a trade-offs...", "Bez zjednodušování..."],
   ingest:     ["Čtu článek...", "Určuju kategorii...", "Vytvářím stránku...", "Propojuju s wiki..."],
   pin:        ["Určuju kategorii...", "Vytvářím stránku...", "Updatuju index...", "Zapisuju do logu..."],
   read:       ["Čtu článek...", "Zpracovávám myšlenky...", "Formuluju názor...", "Hledám zajímavé...", "Skoro hotovo..."],

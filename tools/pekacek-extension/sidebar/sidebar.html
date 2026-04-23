@@ -38,12 +38,22 @@
     <button class="action-btn" data-action="diagram" title="Nakresli ASCII diagram konceptu">
       <span class="btn-icon">&#x1F4CA;</span> Diagram
     </button>
-    <button class="action-btn" data-action="eli5" title="Vysvětli jako pětiletému">
-      <span class="btn-icon">&#x1F476;</span> ELI5
-    </button>
-    <button class="action-btn" data-action="wiki" title="Propojení s wiki">
-      <span class="btn-icon">&#x1F517;</span> Wiki
-    </button>
+    <div class="action-dropdown">
+      <button class="action-btn dropdown-toggle" data-dropdown="explain" title="Vysvětli...">
+        <span class="btn-icon">&#x1F393;</span> Vysvětli <span class="caret">▾</span>
+      </button>
+      <div class="dropdown-menu" id="dropdown-explain">
+        <button class="dropdown-item" data-action="eli5" title="Jako pětiletému dítěti">
+          <span class="btn-icon">&#x1F476;</span> Jako pětiletému
+        </button>
+        <button class="dropdown-item" data-action="simplify" title="Zjednodušeně, bez žargonu">
+          <span class="btn-icon">&#x1F9D2;</span> Zjednodušeně
+        </button>
+        <button class="dropdown-item" data-action="technical" title="Odborně, s technickými detaily">
+          <span class="btn-icon">&#x1F52C;</span> Odborně
+        </button>
+      </div>
+    </div>
     <button class="action-btn action-ingest" data-action="ingest" title="Ingestuj přímo do wiki">
       <span class="btn-icon">&#x1F4DA;</span> Ingest
     </button>

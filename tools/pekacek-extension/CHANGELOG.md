@@ -5,6 +5,17 @@ Semver: `MAJOR.MINOR.PATCH`.
 - **MINOR** — nové feature, zpětně kompatibilní
 - **PATCH** — bugfixy, drobné úpravy
 
+## 2.2.0 — 2026-04-23
+
+### Změny akčních tlačítek
+- **Kompaktnější akční lišta** — ikona inline vedle textu (nebyla nad textem), menší padding, výška řady ~50 % původní. Víc místa pro chat.
+- **🎓 Vysvětli ▾ dropdown** — nahrazuje původní ELI5 tlačítko. Tři úrovně vysvětlení:
+  - 👶 Jako pětiletému (dřívější ELI5)
+  - 🧒 Zjednodušeně (bez žargonu, plnohodnotné vysvětlení pro laika)
+  - 🔬 Odborně (s technickými detaily, edge cases, trade-offs)
+  Dropdown se zavírá kliknutím mimo.
+- **Odstraněno tlačítko 🔗 Wiki** — bylo redundantní (jen navrhovalo, nic nezapisovalo). Stejnou funkci pokryje volný dotaz *"kam to patří ve wiki?"* v chatu; reálný zápis dělá 📚 Ingest (celý článek) nebo 📌 Pin (konkrétní odpověď).
+
 ## 2.1.4 — 2026-04-23
 
 ### Nové
