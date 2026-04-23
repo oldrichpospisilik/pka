@@ -5,6 +5,11 @@ Semver: `MAJOR.MINOR.PATCH`.
 - **MINOR** — nové feature, zpětně kompatibilní
 - **PATCH** — bugfixy, drobné úpravy
 
+## 2.1.4 — 2026-04-23
+
+### Nové
+- **Startup checks v bridge.** Při spuštění se ověří: `claude --version`, pCloud mount `/mnt/p/Wiki/Wiki`, symlink `~/pka/wiki` a read/write přístup. Problémy se logují do stderr s jasnou hláškou (např. "pCloud asi není namountovaný — spusť 'pcloud' alias"). Server startuje nezávisle na výsledku (jen informuje).
+
 ## 2.1.3 — 2026-04-23
 
 ### Opravy

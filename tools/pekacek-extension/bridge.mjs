@@ -10,13 +10,16 @@
  */
 
 import http from "http";
-import { spawn } from "child_process";
+import { spawn, spawnSync } from "child_process";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 
 const PORT = 3888;
 const CLAUDE_BIN = "claude";
 const WORKING_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const WIKI_SYMLINK = path.join(WORKING_DIR, "wiki");
+const WIKI_TARGET = "/mnt/p/Wiki/Wiki";
 
 // Article session cache: pageUrl -> { title, sessionId }
 const articleCache = new Map();
@@ -320,10 +323,62 @@ const server = http.createServer(async (req, res) => {
   res.end("Not found");
 });
 
+function checkEnvironment() {
+  const issues = [];
+  const ok = [];
+
+  // 1. claude binary accessible
+  const claudeCheck = spawnSync(CLAUDE_BIN, ["--version"], { timeout: 3000 });
+  if (claudeCheck.error || claudeCheck.status !== 0) {
+    issues.push(`✗ 'claude' binary není dostupný (${claudeCheck.error?.message || `exit ${claudeCheck.status}`})`);
+  } else {
+    ok.push(`✓ claude: ${claudeCheck.stdout.toString().trim()}`);
+  }
+
+  // 2. pCloud mount present
+  if (!fs.existsSync(WIKI_TARGET)) {
+    issues.push(`✗ ${WIKI_TARGET} neexistuje — pCloud asi není namountovaný (spusť 'pcloud' alias)`);
+  } else {
+    ok.push(`✓ pCloud mount: ${WIKI_TARGET}`);
+  }
+
+  // 3. wiki symlink resolves
+  try {
+    const resolved = fs.realpathSync(WIKI_SYMLINK);
+    if (resolved !== WIKI_TARGET) {
+      issues.push(`⚠ ${WIKI_SYMLINK} → ${resolved} (čekal jsem ${WIKI_TARGET})`);
+    } else {
+      ok.push(`✓ symlink ${WIKI_SYMLINK} → ${resolved}`);
+    }
+  } catch (e) {
+    issues.push(`✗ ${WIKI_SYMLINK} symlink nefunguje: ${e.message}`);
+  }
+
+  // 4. write access to wiki target
+  if (fs.existsSync(WIKI_TARGET)) {
+    try {
+      fs.accessSync(WIKI_TARGET, fs.constants.R_OK | fs.constants.W_OK);
+      ok.push(`✓ wiki read/write OK`);
+    } catch (e) {
+      issues.push(`✗ wiki není zapisovatelná: ${e.message}`);
+    }
+  }
+
+  process.stderr.write(`\n[bridge] Startup checks:\n`);
+  ok.forEach((line) => process.stderr.write(`[bridge]   ${line}\n`));
+  issues.forEach((line) => process.stderr.write(`[bridge]   ${line}\n`));
+  if (issues.length) {
+    process.stderr.write(`[bridge] ⚠ ${issues.length} problém(ů) — Pin do wiki / ingest nemusí fungovat.\n`);
+  }
+  process.stderr.write(`\n`);
+}
+
+checkEnvironment();
+
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`
   ╔══════════════════════════════════════╗
-  ║   Pekáček Bridge v2.1.1             ║
+  ║   Pekáček Bridge v2.1.4             ║
   ║   http://localhost:${PORT}/             ║
   ║                                      ║
   ║   ( o_o) ☕  Čekám na extension...   ║
