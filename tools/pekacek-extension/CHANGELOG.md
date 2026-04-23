@@ -5,6 +5,11 @@ Semver: `MAJOR.MINOR.PATCH`.
 - **MINOR** — nové feature, zpětně kompatibilní
 - **PATCH** — bugfixy, drobné úpravy
 
+## 2.2.2 — 2026-04-23
+
+### Opravy
+- **💾 Uložit ▾ dropdown se už nerozsype mimo obrazovku** — zarovnán k pravému okraji toho tlačítka (dřív `left: 0` + `min-width: 150px` → menu přetékalo doprava mimo panel). Nový CSS utility `.dropdown-right` pro dropdowny u pravého okraje.
+
 ## 2.2.1 — 2026-04-23
 
 ### Konsolidace akčních tlačítek — **5 buttonů místo 9**

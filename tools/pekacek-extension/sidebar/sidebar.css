@@ -331,7 +331,6 @@ body {
   position: absolute;
   top: calc(100% + 3px);
   left: 0;
-  right: 0;
   min-width: 150px;
   background: var(--bg-light);
   border: 1px solid var(--text-muted);
@@ -341,6 +340,12 @@ body {
   padding: 3px;
   flex-direction: column;
   gap: 2px;
+}
+
+/* Right-aligned dropdown (for buttons near right edge) */
+.dropdown-right .dropdown-menu {
+  left: auto;
+  right: 0;
 }
 
 .dropdown-menu.open {
