@@ -100,10 +100,10 @@ else
     warn "Playwright chybí — spusť: npm install"
 fi
 
-if ls "$HOME/.cache/ms-playwright/"firefox-* &>/dev/null 2>&1; then
-    ok "Firefox browser nainstalovaný"
+if ls "$HOME/.cache/ms-playwright/"chromium-* &>/dev/null 2>&1; then
+    ok "Chromium browser nainstalovaný (ČSFD scraping)"
 else
-    warn "Firefox browser chybí — spusť: npx playwright install firefox"
+    warn "Chromium browser chybí — spusť: npx playwright install chromium"
 fi
 
 # --- 6. MCP config ---
@@ -130,6 +130,20 @@ if [ -n "$disk_usage" ] && [ "$disk_usage" -gt 90 ]; then
     warn "Disk C: je na ${disk_usage}% — dávej pozor na velké operace"
 else
     ok "Disk OK (${disk_usage:-?}%)"
+fi
+
+# --- 9. ČSFD pre-auth (zrychlí první Pekáčkův dotaz na watchlist) ---
+if [ -f "$PKA_DIR/.env" ] && [ -f "$PKA_DIR/csfd-rate.mjs" ]; then
+    if [ -f "$PKA_DIR/.csfd-state.json" ]; then
+        ok "ČSFD session existuje (skip login)"
+    else
+        (
+            cd "$PKA_DIR"
+            node csfd-rate.mjs watchlist >/tmp/csfd-preauth.log 2>&1
+        ) &
+        disown
+        ok "ČSFD pre-auth spuštěn na pozadí (log: /tmp/csfd-preauth.log)"
+    fi
 fi
 
 echo ""
