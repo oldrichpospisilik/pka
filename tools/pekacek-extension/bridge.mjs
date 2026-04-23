@@ -21,7 +21,10 @@ const WORKING_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 // Article session cache: pageUrl -> { title, sessionId }
 const articleCache = new Map();
 
-function runClaude(prompt, sessionId, isRetry = false) {
+// Active /ask requests that can be stopped: reqId -> { proc, res, log }
+const activeRequests = new Map();
+
+function runClaude(prompt, sessionId, isRetry = false, timeoutMs = 120_000) {
   return new Promise((resolve, reject) => {
     const args = ["-p", prompt, "--output-format", "text"];
 
@@ -33,7 +36,7 @@ function runClaude(prompt, sessionId, isRetry = false) {
     const proc = spawn(CLAUDE_BIN, args, {
       cwd: WORKING_DIR,
       env: { ...process.env },
-      timeout: 120_000,
+      timeout: timeoutMs,
     });
 
     let stdout = "";
@@ -49,7 +52,7 @@ function runClaude(prompt, sessionId, isRetry = false) {
         // Session locked — retry with fresh session
         if (!isRetry && stderr.includes("already in use")) {
           process.stderr.write(`[bridge] Session locked, retrying with fresh session\n`);
-          runClaude(prompt, null, true).then(resolve).catch(reject);
+          runClaude(prompt, null, true, timeoutMs).then(resolve).catch(reject);
           return;
         }
         reject(new Error(stderr || `claude exited with code ${code}`));
@@ -95,6 +98,25 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ ok: true }));
   }
 
+  // Stop running /ask request
+  if (req.method === "POST" && req.url.startsWith("/stop")) {
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const stopId = url.searchParams.get("id");
+    const entry = stopId ? activeRequests.get(stopId) : null;
+    if (entry) {
+      process.stderr.write(`[bridge] STOP request for ${stopId} — killing PID ${entry.proc.pid}\n`);
+      try {
+        entry.res.write(`data: ${JSON.stringify({ type: "stopped" })}\n\n`);
+      } catch {}
+      try { entry.proc.kill("SIGTERM"); } catch {}
+      activeRequests.delete(stopId);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ ok: true, stopped: stopId }));
+    }
+    res.writeHead(404, { "Content-Type": "application/json" });
+    return res.end(JSON.stringify({ ok: false, error: "No active request with that id" }));
+  }
+
   // Main endpoint — SSE streaming
   if (req.method === "POST" && req.url === "/ask") {
     let body = "";
@@ -127,10 +149,10 @@ const server = http.createServer(async (req, res) => {
 
         // System prompt: skip startup checks, answer directly
         const sidebarSystemPrompt =
-          "Jsi Pekacek v Chrome sidebar panelu. Uzivatel cte clanek. " +
-          "NEPROVADEJ startup checky (udalosti, emaily, clanky) — to plati jen pro interaktivni sezeni v terminalu. " +
-          "Odpovez primo a strucne. Pouzij markdown pro strukturu, code bloky pro ASCII diagramy. " +
-          "Mas pristup k wiki a MCP toolum, pouzivej je jen kdyz to uzivatel explicitne vyzaduje (napr. pri Wiki/Ingest akci).";
+          "Jsi Pekáček v Chrome sidebar panelu. Uživatel čte článek. " +
+          "NEPROVÁDĚJ startup checky (události, emaily, články) — to platí jen pro interaktivní sezení v terminálu. " +
+          "Odpověz přímo a stručně. Použij markdown pro strukturu, code bloky pro ASCII diagramy. " +
+          "Máš přístup k wiki a MCP toolům, používej je jen když to uživatel explicitně vyžaduje (např. při Wiki/Ingest akci).";
 
         const args = [
           "-p", prompt,
@@ -152,6 +174,10 @@ const server = http.createServer(async (req, res) => {
           env: { ...process.env },
         });
         log(`PID: ${proc.pid}`);
+
+        // Register as stoppable and inform client of the id
+        activeRequests.set(reqId, { proc, res, log });
+        res.write(`data: ${JSON.stringify({ type: "session-start", reqId })}\n\n`);
 
         let hasOutput = false;
         let stderrBuf = "";
@@ -244,6 +270,7 @@ const server = http.createServer(async (req, res) => {
 
         proc.on("close", (code, signal) => {
           log(`CLOSE code=${code} signal=${signal} hasOutput=${hasOutput} outputBytes=${outputBytes}`);
+          activeRequests.delete(reqId);
           if (clientDisconnected) return;
 
           if (code === 0 || (code === null && hasOutput)) {
@@ -253,15 +280,15 @@ const server = http.createServer(async (req, res) => {
             log(`ERROR: ${errMsg}`);
             res.write(`data: ${JSON.stringify({ type: "error", error: errMsg })}\n\n`);
           } else {
-            const errMsg = stderrBuf.trim() || `Process killed (signal=${signal}). Zadny output.`;
-            log(`KILLED: ${errMsg}`);
-            res.write(`data: ${JSON.stringify({ type: "error", error: errMsg })}\n\n`);
+            // signal === SIGTERM typicky = user Stop; nehlásit jako error
+            log(`KILLED signal=${signal}`);
           }
           res.end();
         });
 
         proc.on("error", (err) => {
           log(`SPAWN ERROR: ${err.message}`);
+          activeRequests.delete(reqId);
           if (!clientDisconnected) {
             res.write(`data: ${JSON.stringify({ type: "error", error: err.message })}\n\n`);
             res.end();
@@ -270,11 +297,12 @@ const server = http.createServer(async (req, res) => {
 
         // Client disconnect — kill claude process (listen on RESPONSE, not request)
         res.on("close", () => {
-          if (!proc.killed && !hasOutput) {
+          if (!proc.killed) {
             clientDisconnected = true;
             log(`CLIENT DISCONNECTED — killing PID ${proc.pid}`);
-            proc.kill();
+            try { proc.kill("SIGTERM"); } catch {}
           }
+          activeRequests.delete(reqId);
         });
 
       } catch (err) {
@@ -293,10 +321,10 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`
   ╔══════════════════════════════════════╗
-  ║   Pekacek Bridge v2.0               ║
+  ║   Pekáček Bridge v2.1.1             ║
   ║   http://localhost:${PORT}/             ║
   ║                                      ║
-  ║   ( o_o) ☕  Cekam na extension...   ║
+  ║   ( o_o) ☕  Čekám na extension...   ║
   ║   /|___|\\                            ║
   ║    / \\                               ║
   ╚══════════════════════════════════════╝

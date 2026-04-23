@@ -221,6 +221,29 @@ body {
   white-space: nowrap;
 }
 
+#stop-btn {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: rgba(233, 69, 96, 0.12);
+  color: var(--accent);
+  font-family: var(--sans);
+  font-size: 11px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+#stop-btn:hover {
+  background: rgba(233, 69, 96, 0.25);
+  transform: translateY(-1px);
+}
+
+#stop-btn:active {
+  transform: translateY(0);
+}
+
 /* --- Action Buttons --- */
 
 #actions {
@@ -318,10 +341,10 @@ body {
   position: relative;
 }
 
-.copy-btn {
+.copy-btn,
+.pin-btn {
   position: absolute;
   top: 4px;
-  right: 4px;
   width: 22px;
   height: 22px;
   border: none;
@@ -339,19 +362,47 @@ body {
   justify-content: center;
 }
 
-.message.pekacek:hover .copy-btn {
+.copy-btn { right: 4px; }
+.pin-btn { right: 30px; }
+
+.message.pekacek:hover .copy-btn,
+.message.pekacek:hover .pin-btn {
   opacity: 1;
 }
 
-.copy-btn:hover {
+.copy-btn:hover,
+.pin-btn:hover {
   background: rgba(78, 204, 163, 0.25);
   color: var(--green);
 }
 
-.copy-btn.copied {
+.copy-btn.copied,
+.pin-btn.done {
   background: var(--green);
   color: var(--bg);
   opacity: 1;
+}
+
+.pin-btn.working {
+  background: rgba(255, 211, 105, 0.2);
+  color: var(--yellow);
+  opacity: 1;
+}
+
+.pin-result {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--text-muted);
+}
+
+.pin-result code {
+  font-size: 10px;
+}
+
+.pin-result.error {
+  color: var(--accent);
 }
 
 .message.user {

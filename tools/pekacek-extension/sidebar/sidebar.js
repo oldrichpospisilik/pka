@@ -23,6 +23,8 @@ const FACES = {
 let currentPageContent = null;
 let articleRead = false;   // true after Pekáček read the article into session
 let lastReadUrl = null;    // URL of the article in session
+let currentStreamId = null; // reqId of in-flight /ask request (for Stop)
+let currentAbortCtrl = null; // AbortController pro aktuální stream
 
 // --- DOM ---
 const face = document.getElementById("pekacek-face");
@@ -31,6 +33,7 @@ const pageIndicator = document.getElementById("page-indicator");
 const messagesEl = document.getElementById("messages");
 const userInput = document.getElementById("user-input");
 const sendBtn = document.getElementById("send-btn");
+const stopBtn = document.getElementById("stop-btn");
 
 // --- Init ---
 checkBridgeStatus();
@@ -40,6 +43,9 @@ setTimeout(() => {
   startIdleLife();
 }, 2000);
 
+// Clear any pending badge — user is looking at the sidebar now
+try { chrome.runtime.sendMessage({ type: "clear-badge" }, () => {}); } catch {}
+
 // Get tab info and offer to read (no content script needed)
 setTimeout(() => loadTabInfo(), 500);
 
@@ -47,6 +53,37 @@ setTimeout(() => loadTabInfo(), 500);
 document.getElementById("reset-btn").addEventListener("click", () => {
   resetChat();
 });
+
+// Stop button
+stopBtn.addEventListener("click", () => stopStream());
+
+// Esc shortcut — stop generation
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && isWorking && currentStreamId) {
+    e.preventDefault();
+    stopStream();
+  }
+});
+
+function showStopBtn() {
+  stopBtn.style.display = "inline-block";
+}
+
+function hideStopBtn() {
+  stopBtn.style.display = "none";
+}
+
+async function stopStream() {
+  if (!currentStreamId) return;
+  const id = currentStreamId;
+  currentStreamId = null; // prevent double-stop
+  try {
+    await fetch(`${BRIDGE_URL}/stop?id=${encodeURIComponent(id)}`, { method: "POST" });
+  } catch {}
+  if (currentAbortCtrl) {
+    try { currentAbortCtrl.abort(); } catch {}
+  }
+}
 
 function resetChat() {
   // Tell bridge to forget cached session for current URL (before clearing state)
@@ -78,15 +115,15 @@ function resetChat() {
 function checkBridgeStatus() {
   chrome.runtime.sendMessage({ type: "check-bridge" }, (res) => {
     if (res?.status === "running") {
-      statusText.textContent = "Claude Code pripojen";
+      statusText.textContent = "Claude Code připojen";
       statusText.style.color = "#4ecca3";
     } else {
       statusText.textContent = "Bridge offline";
       statusText.style.color = "#e94560";
       addMessage("pekacek",
-        "Bridge neni dostupny. Spust ve WSL:\n\n" +
+        "Bridge není dostupný. Spusť ve WSL:\n\n" +
         "  node tools/pekacek-extension/bridge.mjs\n\n" +
-        "Pak me refreshni (F5 v sidebaru)."
+        "Pak mě refreshni (F5 v sidebaru)."
       );
       setFace("worried", "animate-error");
     }
@@ -234,8 +271,8 @@ function extractPageContent() {
 // Offer Pekáček to read the article (just from title+URL, no content script)
 function offerToRead(title, url) {
   const msgId = addMessage("pekacek",
-    `Vidim clanek: **${truncate(title, 50)}**\n\n` +
-    `Mam si ho precist? Pak budu rychlejsi s dalsima akcema.`
+    `Vidím článek: **${truncate(title, 50)}**\n\n` +
+    `Mám si ho přečíst? Pak budu rychlejší s dalšíma akcema.`
   );
 
   const msgEl = document.getElementById(msgId);
@@ -243,7 +280,7 @@ function offerToRead(title, url) {
   btnRow.style.cssText = "margin-top: 8px; display: flex; gap: 6px;";
 
   const readBtn = document.createElement("button");
-  readBtn.textContent = "Precti si ho";
+  readBtn.textContent = "Přečti si ho";
   readBtn.style.cssText = "padding: 5px 12px; border: 1px solid var(--green); border-radius: 5px; background: rgba(78,204,163,0.15); color: var(--green); font-size: 12px; cursor: pointer;";
   readBtn.addEventListener("click", () => {
     btnRow.remove();
@@ -251,7 +288,7 @@ function offerToRead(title, url) {
   });
 
   const skipBtn = document.createElement("button");
-  skipBtn.textContent = "Preskoc";
+  skipBtn.textContent = "Přeskoč";
   skipBtn.style.cssText = "padding: 5px 12px; border: 1px solid var(--text-muted); border-radius: 5px; background: transparent; color: var(--text-dim); font-size: 12px; cursor: pointer;";
   skipBtn.addEventListener("click", () => {
     btnRow.remove();
@@ -264,25 +301,25 @@ function offerToRead(title, url) {
 
 // Read article into session + give opinion
 async function readArticle(title, url) {
-  addMessage("user", "Precti si ten clanek");
+  addMessage("user", "Přečti si ten článek");
 
   // Now extract content (content script runs here)
   const page = await extractPageContent();
   if (!page || page.__error) {
     const errDetail = page?.__error ? `\n\nDetail: ${page.__error}` : "";
     addMessage("pekacek",
-      `Nepodarilo se precist obsah stranky. Zkus refreshnout stranku (F5) a znovu otevrit sidebar.${errDetail}`
+      `Nepodařilo se přečíst obsah stránky. Zkus refreshnout stránku (F5) a znovu otevřít sidebar.${errDetail}`
     );
     tempFace("worried", "animate-error");
     return;
   }
 
   const prompt =
-    `Uzivatel je na strance "${title}" (${url}). ` +
-    `Precti si clanek a zapamatuj si ho — budou nasledovat dalsi otazky. ` +
-    `Ted mi dej svuj nazor na 3-4 vety: co je hlavni myslenka, co te zaujalo, ` +
-    `a jestli s necim nesouhlasis nebo ti neco chybi.\n\n` +
-    `Obsah clanku:\n${page.text}`;
+    `Uživatel je na stránce "${title}" (${url}). ` +
+    `Přečti si článek a zapamatuj si ho — budou následovat další otázky. ` +
+    `Teď mi dej svůj názor na 3-4 věty: co je hlavní myšlenka, co tě zaujalo, ` +
+    `a jestli s něčím nesouhlasíš nebo ti něco chybí.\n\n` +
+    `Obsah článku:\n${page.text}`;
 
   await sendToBridge(prompt, { saveArticle: true, articleTitle: title, action: "read" });
 
@@ -303,6 +340,8 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden) {
     loadTabInfo();
     checkBridgeStatus();
+    // User is looking at sidebar again — clear badge
+    try { chrome.runtime.sendMessage({ type: "clear-badge" }, () => {}); } catch {}
   }
 });
 
@@ -318,55 +357,55 @@ document.getElementById("actions").addEventListener("click", (e) => {
   // Ensure we have page content (extract if needed)
   ensurePageContent().then((content) => {
     if (!content) {
-      addMessage("pekacek", "Nepodarilo se precist stranku. Zkus refreshnout a znovu.");
+      addMessage("pekacek", "Nepodařilo se přečíst stránku. Zkus refreshnout a znovu.");
       tempFace("worried", "animate-error");
       return;
     }
 
     const text = currentPageContent.selection || currentPageContent.text;
-    const pageCtx = `Stranka: "${currentPageContent.title}"\nURL: ${currentPageContent.url}\n`;
+    const pageCtx = `Stránka: "${currentPageContent.title}"\nURL: ${currentPageContent.url}\n`;
 
     // If article already read into session, use short prompts (no full text resend)
     const hasContext = articleRead && currentPageContent.url === lastReadUrl;
     const ctxNote = hasContext
-      ? `(Clanek uz mas precteny v teto session — nepotrebujes ho znovu.)\n`
+      ? `(Článek už máš přečtený v této session — nepotřebuješ ho znovu.)\n`
       : `${pageCtx}\nObsah:\n${text}`;
 
     const prompts = {
       summarize: hasContext
-        ? `Shrn clanek co uz mas precteny — klicoce myslenky, co je nove/zajimave. Pokud to souvisi s wiki, zmin to.`
-        : `Uzivatel cte clanek v Chrome sidebar panelu. Shrn ho strucne — klicoce myslenky, co je nove/zajimave. Pokud to souvisi s necim ve wiki, zmin to.\n\n${pageCtx}\nObsah:\n${text}`,
+        ? `Shrň článek co už máš přečtený — klíčové myšlenky, co je nové/zajímavé. Pokud to souvisí s wiki, zmiň to.`
+        : `Uživatel čte článek v Chrome sidebar panelu. Shrň ho stručně — klíčové myšlenky, co je nové/zajímavé. Pokud to souvisí s něčím ve wiki, zmiň to.\n\n${pageCtx}\nObsah:\n${text}`,
       counter: hasContext
-        ? `K tomu clanku co uz znas — najdi slabiny, protimyslenky a neoverena tvrzeni. Bud konstruktivne kriticky.`
-        : `Uzivatel cte clanek. Najdi slabiny, protimyslenky a neoverena tvrzeni. Bud konstruktivne kriticky.\n\n${pageCtx}\nObsah:\n${text}`,
+        ? `K tomu článku co už znáš — najdi slabiny, protimyšlenky a neověřená tvrzení. Buď konstruktivně kritický.`
+        : `Uživatel čte článek. Najdi slabiny, protimyšlenky a neověřená tvrzení. Buď konstruktivně kritický.\n\n${pageCtx}\nObsah:\n${text}`,
       experiment: hasContext
-        ? `K tomu clanku — navrhni 2-3 prakticke experimenty nebo zpusoby jak overit tvrzeni. Neco co muze realne zkusit.`
-        : `Uzivatel cte clanek. Navrhni 2-3 prakticke experimenty nebo zpusoby jak overit tvrzeni. Neco co muze realne zkusit.\n\n${pageCtx}\nObsah:\n${text}`,
+        ? `K tomu článku — navrhni 2-3 praktické experimenty nebo způsoby jak ověřit tvrzení. Něco co může reálně zkusit.`
+        : `Uživatel čte článek. Navrhni 2-3 praktické experimenty nebo způsoby jak ověřit tvrzení. Něco co může reálně zkusit.\n\n${pageCtx}\nObsah:\n${text}`,
       analogy: hasContext
-        ? `K tomu clanku — vysvetli hlavni koncepty pomoci ANALOGII z bezneho zivota. "Je to jako kdyz..." Pro kazdy klicocy koncept. Analogie z vareni, sportu, staveni domu, cestovani. Presne, ne jen hezke.`
-        : `Uzivatel cte clanek a chce ho lepe pochopit. Vysvetli hlavni koncepty pomoci ANALOGII z bezneho zivota. Pro kazdy klicocy koncept najdi prirovnani ktere ho zpristupni ("je to jako kdyz..."). Pouzij analogie z vareni, sportu, staveni domu, cestovani — cokoli intuitivniho. Nezjednodusuj az moc — analogie ma byt presna, ne jen hezka.\n\n${pageCtx}\nObsah:\n${text}`,
+        ? `K tomu článku — vysvětli hlavní koncepty pomocí ANALOGIÍ z běžného života. "Je to jako když..." Pro každý klíčový koncept. Analogie z vaření, sportu, stavění domu, cestování. Přesné, ne jen hezké.`
+        : `Uživatel čte článek a chce ho lépe pochopit. Vysvětli hlavní koncepty pomocí ANALOGIÍ z běžného života. Pro každý klíčový koncept najdi přirovnání které ho zpřístupní ("je to jako když..."). Použij analogie z vaření, sportu, stavění domu, cestování — cokoli intuitivního. Nezjednodušuj až moc — analogie má být přesná, ne jen hezká.\n\n${pageCtx}\nObsah:\n${text}`,
       diagram: hasContext
-        ? `K tomu clanku — nakresli ASCII diagramy hlavnich konceptu: flowcharty, hierarchie, casove osy, srovnavaci tabulky, relacni mapy. Vice diagramu pokud pokryva vic temat. Ke kazdemu 1-2 vety vysvetleni. Code bloky.`
-        : `Uzivatel cte clanek a chce VIZUALIZACI hlavnich konceptu. Nakresli ASCII diagramy: flowcharty (sipky →, ↓, boxes [ ]), hierarchie (stromecky), casove osy, srovnavaci tabulky, nebo relacni mapy. Pouzij vice diagramu pokud clanek pokryva vic temat. Ke kazdemu diagramu pridej 1-2 vety vysvetleni. Formatuj diagramy v code blocich.\n\n${pageCtx}\nObsah:\n${text}`,
+        ? `K tomu článku — nakresli ASCII diagramy hlavních konceptů: flowcharty, hierarchie, časové osy, srovnávací tabulky, relační mapy. Více diagramů pokud pokrývá víc témat. Ke každému 1-2 věty vysvětlení. Code bloky.`
+        : `Uživatel čte článek a chce VIZUALIZACI hlavních konceptů. Nakresli ASCII diagramy: flowcharty (šipky →, ↓, boxes [ ]), hierarchie (stromečky), časové osy, srovnávací tabulky, nebo relační mapy. Použij více diagramů pokud článek pokrývá víc témat. Ke každému diagramu přidej 1-2 věty vysvětlení. Formátuj diagramy v code blocích.\n\n${pageCtx}\nObsah:\n${text}`,
       eli5: hasContext
-        ? `K tomu clanku — vysvetli to jako petilétemu diteti. Kratke vety, zadny odborny jazyk, konkretni priklady z detskeho sveta. Ale zachovej jadro myslenky.`
-        : `Uzivatel cte clanek a chce uplne jednoduche vysvetleni. Vysvetli to jako bys to vysvetloval zvedavemu petilétemu diteti — kratke vety, zadny odborny jazyk, konkretni priklady z detskeho sveta. Ale zachovej jadro myslenky — ELI5 neznamena nepresny.\n\n${pageCtx}\nObsah:\n${text}`,
+        ? `K tomu článku — vysvětli to jako pětiletému dítěti. Krátké věty, žádný odborný jazyk, konkrétní příklady z dětského světa. Ale zachovej jádro myšlenky.`
+        : `Uživatel čte článek a chce úplně jednoduché vysvětlení. Vysvětli to jako bys to vysvětloval zvědavému pětiletému dítěti — krátké věty, žádný odborný jazyk, konkrétní příklady z dětského světa. Ale zachovej jádro myšlenky — ELI5 neznamená nepřesný.\n\n${pageCtx}\nObsah:\n${text}`,
       wiki: hasContext
-        ? `K tomu clanku — kam by patril v nasi wiki? Navrhni kategorii, nazev stranky, propojeni s existujicimi tematy. Mas pristup k wiki — podivej se co uz tam je.`
-        : `Uzivatel cte clanek. Kam by patril v nasi wiki? Navrhni kategorii, nazev stranky, propojeni s existujicimi tematy. Mas pristup k wiki — podivej se co uz tam je.\n\n${pageCtx}\nObsah:\n${text}`,
+        ? `K tomu článku — kam by patřil v naší wiki? Navrhni kategorii, název stránky, propojení s existujícími tématy. Máš přístup k wiki — podívej se co už tam je.`
+        : `Uživatel čte článek. Kam by patřil v naší wiki? Navrhni kategorii, název stránky, propojení s existujícími tématy. Máš přístup k wiki — podívej se co už tam je.\n\n${pageCtx}\nObsah:\n${text}`,
     };
 
     const userMsg = prompts[action];
     if (!userMsg) return;
 
     const labels = {
-      summarize: "Shrn tuhle stranku",
-      counter: "Najdi slabiny a protimyslenky",
-      experiment: "Navrhni experimenty k overeni",
-      analogy: "Vysvetli pomoci analogii",
+      summarize: "Shrň tuhle stránku",
+      counter: "Najdi slabiny a protimyšlenky",
+      experiment: "Navrhni experimenty k ověření",
+      analogy: "Vysvětli pomocí analogií",
       diagram: "Nakresli diagram konceptu",
-      eli5: "Vysvetli jako patiletemu",
-      wiki: "Kam to patri ve wiki?",
+      eli5: "Vysvětli jako pětiletému",
+      wiki: "Kam to patří ve wiki?",
     };
     addMessage("user", labels[action]);
     sendToBridge(userMsg, { action });
@@ -377,7 +416,7 @@ document.getElementById("actions").addEventListener("click", (e) => {
 async function handleSave() {
   if (!currentPageContent) await ensurePageContent();
   if (!currentPageContent) {
-    addMessage("pekacek", "Neni co ulozit — otevri stranku.");
+    addMessage("pekacek", "Není co uložit — otevři stránku.");
     return;
   }
 
@@ -385,10 +424,10 @@ async function handleSave() {
     { type: "save-to-raw", url: currentPageContent.url, title: currentPageContent.title },
     (res) => {
       if (res?.success) {
-        addMessage("pekacek", `Ulozeno do _raw: "${truncate(currentPageContent.title, 40)}"`);
+        addMessage("pekacek", `Uloženo do _raw: "${truncate(currentPageContent.title, 40)}"`);
         tempFace("dancing", "animate-dance", 2500);
       } else {
-        addMessage("pekacek", `Chyba: ${res?.error || "neznama"}`);
+        addMessage("pekacek", `Chyba: ${res?.error || "neznámá"}`);
         tempFace("worried", "animate-error");
       }
     }
@@ -399,16 +438,16 @@ async function handleSave() {
 async function handleIngest() {
   if (!currentPageContent) await ensurePageContent();
   if (!currentPageContent) {
-    addMessage("pekacek", "Neni co ingestovat — otevri stranku.");
+    addMessage("pekacek", "Není co ingestovat — otevři stránku.");
     return;
   }
 
-  addMessage("user", "Ingestuj tuhle stranku do wiki");
+  addMessage("user", "Ingestuj tuhle stránku do wiki");
 
   const prompt =
-    `Uzivatel chce ingestovat tuto stranku do wiki. Zpracuj ji podle ingest workflow v CLAUDE.md — ` +
-    `urcil kategorii, vytvor wiki stranku, propoj s existujicimi strankami, aktualizuj index.md a log.md.\n\n` +
-    `Stranka: "${currentPageContent.title}"\nURL: ${currentPageContent.url}\n\nObsah:\n${currentPageContent.text}`;
+    `Uživatel chce ingestovat tuto stránku do wiki. Zpracuj ji podle ingest workflow v CLAUDE.md — ` +
+    `urči kategorii, vytvoř wiki stránku, propoj s existujícími stránkami, aktualizuj index.md a log.md.\n\n` +
+    `Stránka: "${currentPageContent.title}"\nURL: ${currentPageContent.url}\n\nObsah:\n${currentPageContent.text}`;
 
   sendToBridge(prompt, { action: "ingest" });
 }
@@ -435,8 +474,8 @@ function handleUserMessage() {
   if (currentPageContent && !hasCtx) {
     const pageText = currentPageContent.selection || currentPageContent.text;
     fullMsg =
-      `Kontext stranky (uzivatel ji cte v Chrome): "${currentPageContent.title}" (${currentPageContent.url})\n` +
-      `Text: ${pageText.slice(0, 8000)}\n\n---\nDotaz uzivatele: ${text}`;
+      `Kontext stránky (uživatel ji čte v Chrome): "${currentPageContent.title}" (${currentPageContent.url})\n` +
+      `Text: ${pageText.slice(0, 8000)}\n\n---\nDotaz uživatele: ${text}`;
   }
 
   sendToBridge(fullMsg);
@@ -455,6 +494,7 @@ const THINKING_MESSAGES = {
   eli5:       ["Zjednodušuju...", "Hledám správná slova...", "Tak aby to dítě pochopilo...", "Bez žargonu..."],
   wiki:       ["Prohledávám wiki...", "Kam to patří?...", "Hledám souvislosti...", "Propojuju s existujícím..."],
   ingest:     ["Čtu článek...", "Určuju kategorii...", "Vytvářím stránku...", "Propojuju s wiki..."],
+  pin:        ["Určuju kategorii...", "Vytvářím stránku...", "Updatuju index...", "Zapisuju do logu..."],
   read:       ["Čtu článek...", "Zpracovávám myšlenky...", "Formuluju názor...", "Hledám zajímavé...", "Skoro hotovo..."],
   default:    ["Přemýšlím...", "Ještě chvilku...", "Skoro to mám...", "Formuluju..."],
 };
@@ -501,6 +541,7 @@ async function sendToBridge(prompt, extra = {}) {
   stopIdleLife();
   setFace("thinking", "animate-thinking");
   startThinkingMessages(extra.action);
+  showStopBtn();
 
   // Create empty message that we'll fill with streamed tokens
   const msgId = addMessage("pekacek", "", true);
@@ -508,6 +549,10 @@ async function sendToBridge(prompt, extra = {}) {
   const contentEl = msgEl.querySelector(".message-content");
   contentEl.className = "message-content"; // remove loading-dots
   let fullText = "";
+  let wasStopped = false;
+
+  const abortCtrl = new AbortController();
+  currentAbortCtrl = abortCtrl;
 
   try {
     const response = await fetch(`${BRIDGE_URL}/ask`, {
@@ -518,6 +563,7 @@ async function sendToBridge(prompt, extra = {}) {
         pageUrl: currentPageContent?.url || null,
         ...extra,
       }),
+      signal: abortCtrl.signal,
     });
 
     if (!response.ok) {
@@ -548,7 +594,14 @@ async function sendToBridge(prompt, extra = {}) {
         try {
           const event = JSON.parse(line.slice(6));
 
-          if (event.type === "token") {
+          if (event.type === "session-start") {
+            currentStreamId = event.reqId;
+          } else if (event.type === "stopped") {
+            wasStopped = true;
+            const stoppedText = (fullText || "") + "\n\n_(přerušeno)_";
+            contentEl.innerHTML = formatMessage(stoppedText);
+            msgEl.dataset.rawText = stoppedText;
+          } else if (event.type === "token") {
             // First token: stop thinking rotation, switch to "reading" mode
             if (!fullText) {
               stopThinkingMessages();
@@ -563,13 +616,13 @@ async function sendToBridge(prompt, extra = {}) {
           } else if (event.type === "tool") {
             // Tool use indicator
             const toolLabels = {
-              Read: "cte soubor",
-              Grep: "hleda v souborech",
-              Glob: "hleda soubory",
-              WebFetch: "stahuje stranku",
-              WebSearch: "vyhledava",
-              Bash: "spousti prikaz",
-              ToolSearch: "hleda tooly",
+              Read: "čte soubor",
+              Grep: "hledá v souborech",
+              Glob: "hledá soubory",
+              WebFetch: "stahuje stránku",
+              WebSearch: "vyhledává",
+              Bash: "spouští příkaz",
+              ToolSearch: "hledá tooly",
             };
             const label = toolLabels[event.name] || event.name;
             statusText.textContent = `${label}...`;
@@ -582,6 +635,10 @@ async function sendToBridge(prompt, extra = {}) {
             tempFace("worried", "animate-error");
             statusText.textContent = "Chyba";
             statusText.style.color = "#e94560";
+            isWorking = false;
+            currentStreamId = null;
+            currentAbortCtrl = null;
+            hideStopBtn();
             return;
           } else if (event.type === "done") {
             // Finished
@@ -591,28 +648,60 @@ async function sendToBridge(prompt, extra = {}) {
     }
 
     // Final render
-    if (fullText) {
+    if (!wasStopped && fullText) {
       contentEl.innerHTML = formatMessage(fullText);
       scrollToBottom();
     }
 
     isWorking = false;
     stopThinkingMessages();
-    tempFace("happy", "animate-happy", 1500);
-    statusText.textContent = "Hotovo";
-    statusText.style.color = "#4ecca3";
+    currentStreamId = null;
+    currentAbortCtrl = null;
+    hideStopBtn();
+    if (wasStopped) {
+      tempFace("chill", "animate-idle", 1500);
+      statusText.textContent = "Přerušeno";
+      statusText.style.color = "#ffd369";
+    } else {
+      tempFace("happy", "animate-happy", 1500);
+      statusText.textContent = "Hotovo";
+      statusText.style.color = "#4ecca3";
+      // Uživatel se dívá jinam → badge na ikoně
+      if (document.hidden) {
+        try { chrome.runtime.sendMessage({ type: "response-done" }, () => {}); } catch {}
+      }
+    }
     setTimeout(() => {
-      statusText.textContent = "Pripraveny";
+      statusText.textContent = "Připraveny";
       statusText.style.color = "";
     }, 3000);
 
   } catch (err) {
     isWorking = false;
     stopThinkingMessages();
+    currentStreamId = null;
+    currentAbortCtrl = null;
+    hideStopBtn();
     startIdleLife();
+
+    // AbortError = user clicked Stop — neukazuj error, jen "přerušeno"
+    if (err.name === "AbortError") {
+      const stoppedText = (fullText || "") + "\n\n_(přerušeno)_";
+      contentEl.innerHTML = formatMessage(stoppedText);
+      msgEl.dataset.rawText = stoppedText;
+      tempFace("chill", "animate-idle", 1500);
+      statusText.textContent = "Přerušeno";
+      statusText.style.color = "#ffd369";
+      setTimeout(() => {
+        statusText.textContent = "Připraveny";
+        statusText.style.color = "";
+      }, 3000);
+      return;
+    }
+
     contentEl.innerHTML = formatMessage(
       err.message.includes("Failed to fetch")
-        ? "Bridge neni dostupny — spust ve WSL:\n  node tools/pekacek-extension/bridge.mjs"
+        ? "Bridge není dostupný — spusť ve WSL:\n  node tools/pekacek-extension/bridge.mjs"
         : `Chyba: ${err.message}`
     );
     tempFace("worried", "animate-error");
@@ -634,17 +723,18 @@ function addMessage(role, content, isLoading = false) {
   contentDiv.className = "message-content" + (isLoading ? " loading-dots" : "");
 
   if (isLoading) {
-    contentDiv.textContent = "Premyslim";
+    contentDiv.textContent = "Přemýšlím";
   } else {
     contentDiv.innerHTML = formatMessage(content);
   }
 
   div.appendChild(contentDiv);
 
-  // Copy button for Pekáček messages (not for loading state or user)
+  // Copy + Pin buttons for Pekáček messages (not for loading state or user)
   if (role === "pekacek") {
     // Store raw text for clipboard (updated during streaming)
     div.dataset.rawText = isLoading ? "" : content;
+
     const copyBtn = document.createElement("button");
     copyBtn.className = "copy-btn";
     copyBtn.title = "Zkopírovat do schránky";
@@ -667,6 +757,16 @@ function addMessage(role, content, isLoading = false) {
       }
     });
     div.appendChild(copyBtn);
+
+    const pinBtn = document.createElement("button");
+    pinBtn.className = "pin-btn";
+    pinBtn.title = "Uložit jako stránku do wiki";
+    pinBtn.textContent = "📌";
+    pinBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await pinMessageToWiki(div, pinBtn);
+    });
+    div.appendChild(pinBtn);
   }
 
   messagesEl.appendChild(div);
@@ -676,6 +776,37 @@ function addMessage(role, content, isLoading = false) {
 
 function removeMessage(id) {
   document.getElementById(id)?.remove();
+}
+
+function pinMessageToWiki(msgDiv, btn) {
+  const text = msgDiv.dataset.rawText || "";
+  if (!text.trim()) return;
+  if (btn.disabled || isWorking) return;
+
+  // Mark button as done — pin sent, detail viz v streamu níže
+  btn.disabled = true;
+  btn.textContent = "✓";
+  btn.classList.add("done");
+  btn.title = "Pinováno — viz odpověď níže";
+
+  const sourceLine = currentPageContent?.url
+    ? `Zdrojový článek: "${currentPageContent.title || ""}" (${currentPageContent.url})`
+    : "(Bez zdrojového článku.)";
+
+  const pinPrompt =
+    `Uživatel označil tuto odpověď v Pekáček Chrome sidebaru jako hodnotnou a chce ji uložit do wiki jako novou stránku.\n\n` +
+    `Postup:\n` +
+    `1) Urči nejvhodnější kategorii ve wiki/ (astronomie, cestovani, vzdelavani, myslenky, clanky, technologie, gaming, kultura, nakupy, recepty, lab — nebo jinou existující podsložku).\n` +
+    `2) Zvol krátký výstižný název souboru v kebab-case bez diakritiky.\n` +
+    `3) Vytvoř stránku podle formátu v CLAUDE.md (Shrnutí, Zdroje, Poslední aktualizace, obsah, [[wiki-links]] pokud relevantní). Nepřepisuj existující — pokud název koliduje, zvol jiný.\n` +
+    `4) Aktualizuj wiki/index.md.\n` +
+    `5) Zapiš záznam do wiki/log.md (zmiň "pinned z Pekáček sidebaru").\n` +
+    `6) Finální řádek odpovědi: \`📌 Uloženo: wiki/<kategorie>/<soubor>.md\`\n\n` +
+    `${sourceLine}\n\n` +
+    `Obsah k uložení:\n---\n${text}\n---`;
+
+  addMessage("user", "📌 Ulož předchozí odpověď do wiki");
+  sendToBridge(pinPrompt, { action: "pin" });
 }
 
 function formatMessage(text) {

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Pekacek — Reading Companion",
-  "version": "2.1.0",
-  "description": "PKA osobni znalostni asistent — sidebar pro cteni, souhrny, protimyslenky a wiki ingest.",
+  "name": "Pekáček — Reading Companion",
+  "version": "2.1.1",
+  "description": "PKA osobní znalostní asistent — sidebar pro čtení, souhrny, protimyšlenky a wiki ingest.",
   "permissions": [
     "sidePanel",
     "activeTab",
@@ -31,7 +31,7 @@
     }
   ],
   "action": {
-    "default_title": "Pekacek — klik otevre sidebar, pravy klik > Moznosti"
+    "default_title": "Pekáček — klik otevře sidebar, pravý klik > Možnosti"
   },
   "options_ui": {
     "page": "options/options.html",

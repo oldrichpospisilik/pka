@@ -10,7 +10,7 @@ document.getElementById("save").addEventListener("click", () => {
   const bridgeUrl = document.getElementById("bridgeUrl").value.trim() || DEFAULT_BRIDGE;
 
   chrome.storage.local.set({ bridgeUrl }, () => {
-    document.getElementById("status").textContent = "Ulozeno \\(^o^)/";
+    document.getElementById("status").textContent = "Uloženo \\(^o^)/";
     document.getElementById("status").style.color = "#4ecca3";
     setTimeout(() => {
       document.getElementById("status").textContent = "";
@@ -37,7 +37,7 @@ async function checkBridge(url) {
     }
   } catch {
     dot.className = "dot dot-offline";
-    label.textContent = "Bridge nedostupny — spust bridge.mjs ve WSL";
+    label.textContent = "Bridge nedostupný — spusť bridge.mjs ve WSL";
   }
 }
 

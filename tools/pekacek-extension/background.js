@@ -141,7 +141,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             if (injectErr) {
               console.error("[Pekacek] inject failed:", injectErr.message);
               return sendResponse({
-                error: `Nelze injektovat content script: ${injectErr.message}. Mozna je stranka chranena (chrome://, store, PDF...).`,
+                error: `Nelze injektovat content script: ${injectErr.message}. Možná je stránka chráněna (chrome://, store, PDF...).`,
               });
             }
             console.log("[Pekacek] injected, retrying extraction");
@@ -178,6 +178,25 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     saveToRawBookmarks(msg.url, msg.title).then(sendResponse);
     return true;
   }
+
+  // Badge notifications — sidebar completed a response while user was away
+  if (msg.type === "response-done") {
+    chrome.action.setBadgeText({ text: "●" });
+    chrome.action.setBadgeBackgroundColor({ color: "#4ecca3" });
+    sendResponse({ ok: true });
+    return;
+  }
+
+  if (msg.type === "clear-badge") {
+    chrome.action.setBadgeText({ text: "" });
+    sendResponse({ ok: true });
+    return;
+  }
+});
+
+// Clear badge when user clicks the toolbar icon (regardless of side panel open state)
+chrome.action.onClicked.addListener(() => {
+  chrome.action.setBadgeText({ text: "" });
 });
 
 // --- Bridge communication ---
@@ -198,7 +217,7 @@ async function saveToRawBookmarks(url, title) {
   const rawFolder = results.find((b) => b.url === undefined);
 
   if (!rawFolder) {
-    return { error: "Slozka _raw nenalezena v zalozkach" };
+    return { error: "Složka _raw nenalezena v záložkách" };
   }
 
   const bookmark = await chrome.bookmarks.create({

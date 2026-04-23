@@ -7,7 +7,7 @@
 <body>
   <!-- Pekacek avatar -->
   <div id="pekacek-avatar">
-    <button id="reset-btn" title="Vycistit chat a zeptat se znovu">↻</button>
+    <button id="reset-btn" title="Vyčistit chat a zeptat se znovu">↻</button>
     <div id="pekacek-face" class="animate-idle">
   ( o_o)
   /|___|\
@@ -16,37 +16,38 @@
 
   <!-- Status bar -->
   <div id="status-bar">
-    <span id="status-text">Pripraveny</span>
+    <span id="status-text">Připraveny</span>
     <span id="page-indicator"></span>
+    <button id="stop-btn" title="Zastavit generování (Esc)" style="display:none;">⏹ Stop</button>
   </div>
 
   <!-- Quick actions -->
   <div id="actions">
-    <button class="action-btn" data-action="summarize" title="Souhrn stranky">
+    <button class="action-btn" data-action="summarize" title="Souhrn stránky">
       <span class="btn-icon">&#x1F4CB;</span> Souhrn
     </button>
-    <button class="action-btn" data-action="counter" title="Protimyslenky">
+    <button class="action-btn" data-action="counter" title="Protimyšlenky">
       <span class="btn-icon">&#x1F914;</span> Proti
     </button>
-    <button class="action-btn" data-action="experiment" title="Experimenty k vyzkouseni">
+    <button class="action-btn" data-action="experiment" title="Experimenty k vyzkoušení">
       <span class="btn-icon">&#x1F52C;</span> Zkus
     </button>
-    <button class="action-btn" data-action="analogy" title="Vysvetli pomoci analogii a jednoduchych prikladu">
+    <button class="action-btn" data-action="analogy" title="Vysvětli pomocí analogií a jednoduchých příkladů">
       <span class="btn-icon">&#x1F4A1;</span> Analogie
     </button>
     <button class="action-btn" data-action="diagram" title="Nakresli ASCII diagram konceptu">
       <span class="btn-icon">&#x1F4CA;</span> Diagram
     </button>
-    <button class="action-btn" data-action="eli5" title="Vysvetli jako patiletemu">
+    <button class="action-btn" data-action="eli5" title="Vysvětli jako pětiletému">
       <span class="btn-icon">&#x1F476;</span> ELI5
     </button>
-    <button class="action-btn" data-action="wiki" title="Propojeni s wiki">
+    <button class="action-btn" data-action="wiki" title="Propojení s wiki">
       <span class="btn-icon">&#x1F517;</span> Wiki
     </button>
-    <button class="action-btn action-ingest" data-action="ingest" title="Ingestuj primo do wiki">
+    <button class="action-btn action-ingest" data-action="ingest" title="Ingestuj přímo do wiki">
       <span class="btn-icon">&#x1F4DA;</span> Ingest
     </button>
-    <button class="action-btn action-save" data-action="save" title="Ulozit do _raw zalozek">
+    <button class="action-btn action-save" data-action="save" title="Uložit do _raw záložek">
       <span class="btn-icon">&#x1F4BE;</span> Raw
     </button>
   </div>
@@ -58,7 +59,7 @@
 
   <!-- Input -->
   <div id="input-area">
-    <textarea id="user-input" placeholder="Zeptej se Pekacka..." rows="2"></textarea>
+    <textarea id="user-input" placeholder="Zeptej se Pekáčka..." rows="2"></textarea>
     <button id="send-btn" title="Odeslat">&#x27A4;</button>
   </div>
 

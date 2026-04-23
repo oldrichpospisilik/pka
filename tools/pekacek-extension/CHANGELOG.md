@@ -5,6 +5,18 @@ Semver: `MAJOR.MINOR.PATCH`.
 - **MINOR** — nové feature, zpětně kompatibilní
 - **PATCH** — bugfixy, drobné úpravy
 
+## 2.1.1 — 2026-04-23
+
+### Nové
+- **Stop tlačítko ⏹** v status baru během generování — zastaví běžící Claude Code proces. Klávesová zkratka **Esc**. Bridge nový endpoint `POST /stop?id=<reqId>` kill-uje spawn, sidebar obdrží `stopped` event a doplní `(přerušeno)` k částečné odpovědi.
+- **Badge 🔔 na toolbar ikoně** — když Pekáček dokončí odpověď a uživatel se mezitím přepnul do jiné záložky (`document.hidden`), na ikoně se zobrazí zelená tečka. Smaže se při návratu do sidebaru (visibilitychange → visible) nebo po kliknutí na ikonu.
+- **Pin do wiki 📌** — u každé Pekáčkovy odpovědi nové tlačítko vedle Copy. Klik → přidá user message "📌 Ulož předchozí odpověď do wiki" a pošle pin prompt přes standardní `/ask` SSE flow. Claude Code urcí kategorii, založí stránku (dle formátu v CLAUDE.md), aktualizuje index.md + log.md, streamuje progress. Finální řádek odpovědi obsahuje cestu `📌 Uloženo: wiki/<kat>/<soubor>.md`.
+
+### UX / Polish
+- **Diakritika** — doplněna do všech user-facing stringů (sidebar.html/js, options.html/js, background.js, bridge.mjs banner + system prompt). Tool indikátory v češtině s diakritikou.
+- **SIGTERM handling v bridge** — proces zabitý user Stopem už nehlásí jako error, čistě se uzavře stream.
+- **activeRequests map** v bridge — tracking běžících /ask requestů pro čistý cleanup při disconnect / stop / close.
+
 ## 2.1.0 — 2026-04-22
 
 ### Nové
