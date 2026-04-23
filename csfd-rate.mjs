@@ -5,14 +5,17 @@
  * CLI:
  *   node csfd-rate.mjs rate <csfd-url-nebo-id> <hvezdicky-1-5>
  *   node csfd-rate.mjs check <csfd-url-nebo-id>
- *   node csfd-rate.mjs watchlist [--all]
+ *   node csfd-rate.mjs watchlist [--all] [--no-cache]
  *   node csfd-rate.mjs watchlist-add <csfd-url-nebo-id> [poznamka]
  *   node csfd-rate.mjs watchlist-remove <csfd-url-nebo-id>
- *   node csfd-rate.mjs logout              (smaže uložený login state)
+ *   node csfd-rate.mjs logout              (smaže login state + watchlist cache)
+ *
+ * Cache watchlistu: ~/pka/.csfd-watchlist-cache.json, TTL 10 min (lze přepsat CSFD_CACHE_TTL_SEC env).
+ * Watchlist cache se automaticky invaliduje po úspěšném watchlist-add / watchlist-remove.
  */
 
 import 'dotenv/config';
-import { firefox } from 'playwright';
+import { chromium } from 'playwright';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -20,6 +23,8 @@ import { fileURLToPath } from 'url';
 const { CSFD_USERNAME, CSFD_PASSWORD } = process.env;
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const STATE_FILE = path.join(SCRIPT_DIR, '.csfd-state.json');
+const WATCHLIST_CACHE = path.join(SCRIPT_DIR, '.csfd-watchlist-cache.json');
+const WATCHLIST_TTL_MS = (parseInt(process.env.CSFD_CACHE_TTL_SEC, 10) || 600) * 1000; // default 10 min
 
 // --- Helpers ---
 
@@ -79,8 +84,12 @@ async function createSession() {
     throw new Error('Chybí CSFD_USERNAME nebo CSFD_PASSWORD v .env');
   }
 
-  const browser = await firefox.launch({ headless: true });
-  const contextOpts = { locale: 'cs-CZ', timezoneId: 'Europe/Prague' };
+  const browser = await chromium.launch({ headless: true });
+  const contextOpts = {
+    locale: 'cs-CZ',
+    timezoneId: 'Europe/Prague',
+    userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  };
   const hasState = fs.existsSync(STATE_FILE);
   if (hasState) {
     contextOpts.storageState = STATE_FILE;
@@ -187,7 +196,43 @@ export async function checkRating(filmInput) {
 
 // --- Watchlist ---
 
-export async function getWatchlist({ allPages = false } = {}) {
+function readWatchlistCache(allPages) {
+  if (!fs.existsSync(WATCHLIST_CACHE)) return null;
+  try {
+    const raw = JSON.parse(fs.readFileSync(WATCHLIST_CACHE, 'utf8'));
+    const fresh = Date.now() - raw.timestamp < WATCHLIST_TTL_MS;
+    const matchesScope = raw.allPages === allPages || raw.allPages === true; // full cache slouží i pro first-page request
+    if (fresh && matchesScope) return raw;
+  } catch {
+    // Poškozený cache soubor, ignoruj
+  }
+  return null;
+}
+
+function writeWatchlistCache(result, allPages) {
+  try {
+    fs.writeFileSync(
+      WATCHLIST_CACHE,
+      JSON.stringify({ timestamp: Date.now(), allPages, ...result }, null, 2)
+    );
+  } catch {
+    // Cache zápis selhal — neblokovat
+  }
+}
+
+function invalidateWatchlistCache() {
+  if (fs.existsSync(WATCHLIST_CACHE)) fs.unlinkSync(WATCHLIST_CACHE);
+}
+
+export async function getWatchlist({ allPages = false, noCache = false } = {}) {
+  if (!noCache) {
+    const cached = readWatchlistCache(allPages);
+    if (cached) {
+      const films = allPages ? cached.films : cached.films.slice(0, 20); // první stránka = prvních ~20
+      return { films, pages: cached.pages, total: films.length, fromCache: true, cachedAt: cached.timestamp };
+    }
+  }
+
   const { browser, context, page } = await createSession();
 
   try {
@@ -221,7 +266,9 @@ export async function getWatchlist({ allPages = false } = {}) {
       currentPage++;
     }
 
-    return { films, pages: currentPage, total: films.length };
+    const result = { films, pages: currentPage, total: films.length };
+    writeWatchlistCache(result, allPages);
+    return result;
   } finally {
     await browser.close();
   }
@@ -257,6 +304,7 @@ export async function watchlistAdd(filmInput, note = '') {
 
     const pageText = await page.textContent('body');
     const success = pageText.includes('úspěšně') || pageText.includes('Odebrat z Chci vidět');
+    if (success) invalidateWatchlistCache();
 
     return {
       success,
@@ -295,6 +343,7 @@ export async function watchlistRemove(filmInput) {
 
     const pageText = await page.textContent('body');
     const success = pageText.includes('úspěšně') || pageText.includes('Přidat do Chci vidět');
+    if (success) invalidateWatchlistCache();
 
     return {
       success,
@@ -332,9 +381,11 @@ if (command === 'rate') {
 
 } else if (command === 'watchlist') {
   const allPages = args.includes('--all');
+  const noCache = args.includes('--no-cache');
   console.log(allPages ? 'Načítám celý watchlist...' : 'Načítám první stránku watchlistu...');
-  const result = await getWatchlist({ allPages });
-  console.log(`\n${result.total} filmů${allPages ? '' : ' (stránka 1)'}:\n`);
+  const result = await getWatchlist({ allPages, noCache });
+  const age = result.fromCache ? ` (z cache, stáří ${Math.round((Date.now() - result.cachedAt) / 1000)}s)` : '';
+  console.log(`\n${result.total} filmů${allPages ? '' : ' (stránka 1)'}${age}:\n`);
   for (const film of result.films) {
     console.log(`  ${film.title}  https://www.csfd.cz${film.href}`);
   }
@@ -361,12 +412,10 @@ if (command === 'rate') {
   console.log(result.success ? `✓ ${result.message}` : `✗ ${result.message}`);
 
 } else if (command === 'logout') {
-  if (fs.existsSync(STATE_FILE)) {
-    fs.unlinkSync(STATE_FILE);
-    console.log('✓ Login state smazán');
-  } else {
-    console.log('Nic k smazání (state file neexistuje)');
-  }
+  let deleted = 0;
+  if (fs.existsSync(STATE_FILE)) { fs.unlinkSync(STATE_FILE); deleted++; }
+  if (fs.existsSync(WATCHLIST_CACHE)) { fs.unlinkSync(WATCHLIST_CACHE); deleted++; }
+  console.log(deleted ? `✓ Smazáno ${deleted} soubor(ů) (state + cache)` : 'Nic k smazání');
   process.exit(0);
 
 } else if (command) {
