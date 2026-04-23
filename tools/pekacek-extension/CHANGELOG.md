@@ -5,6 +5,14 @@ Semver: `MAJOR.MINOR.PATCH`.
 - **MINOR** — nové feature, zpětně kompatibilní
 - **PATCH** — bugfixy, drobné úpravy
 
+## 2.5.0 — 2026-04-23
+
+### Nové
+- **Přepínač "watchlist vs celá ČSFD"** ve filmovém pickeru. Třetí chip řádek v ⚡ dropdownu:
+  - 📋 **watchlist** (default) — hledá v mém Chci vidět (jako dosud, přes `csfd-rate.mjs watchlist --all`).
+  - 🌐 **celé ČSFD** — hledá v celé databázi ČSFD přes `mcp__csfd__search` + `mcp__csfd__get_movie`. Doporučuje i filmy které nemám ve watchlistu (na konci řádku *"— mimo watchlist"*). Preferuje filmy s hodnocením ≥ 70 %.
+- **Podpora `--genre` v `csfd-rate.mjs watchlist`** (viz hlavní repo) — prompt teď explicitně radí Claudovi tento flag použít pro přesné filtrování dle žánru místo hádání podle názvů.
+
 ## 2.4.0 — 2026-04-23
 
 ### Nové

@@ -380,6 +380,7 @@ const FILM_LENGTH_DESC = {
 function buildFilmPrompt() {
   const moods = [...document.querySelectorAll("#film-moods .chip.active")].map((c) => c.dataset.mood);
   const length = document.querySelector("#film-length .chip.active")?.dataset.length || "any";
+  const source = document.querySelector("#film-source .chip.active")?.dataset.source || "watchlist";
 
   const moodStr = moods.length > 0
     ? moods.map((m) => FILM_MOOD_DESC[m]).join("; ")
@@ -390,10 +391,15 @@ function buildFilmPrompt() {
     ? moods.map((m) => FILM_MOOD_SHORT[m]).join(" + ")
     : "libovolné";
   const shortLen = length === "any" ? "" : ` · ${FILM_LENGTH_DESC[length]}`;
+  const sourceLabel = source === "csfd" ? "ČSFD" : "watchlist";
+
+  const promptBody = source === "csfd"
+    ? `Doporuč mi film z celé ČSFD databáze (klidně i filmy které nemám ve watchlistu). Nálada: ${moodStr}.${lengthNote} Použij \`mcp__csfd__search\` pro hledání a \`mcp__csfd__get_movie\` pro ověření žánrů a hodnocení. Vyber 3 tituly — u každého řádek proč + rok, žánr, délka a ČSFD hodnocení. Preferuj filmy s hodnocením ≥ 70 %. Pokud film nemám ve watchlistu, zmíním to na konci řádku (např. "— mimo watchlist").`
+    : `Doporuč mi film z mého ČSFD watchlistu. Použij \`node csfd-rate.mjs watchlist --all\` (pokud známe žánry, přidej \`--genre=<id|nazev>[,...]\` pro přesné filtrování, např. \`--genre=horor,komedie\`). Nálada: ${moodStr}.${lengthNote} Vyber 3 tituly které nejlépe sedí — u každého krátce (1 řádek) proč se hodí, plus pokud snadno zjistíš, doplň délku + žánr + rok.`;
 
   return {
-    label: `Doporuč film (${shortMood}${shortLen})`,
-    prompt: `Doporuč mi film z mého ČSFD watchlistu. Nejdřív zkontroluj seznam pomocí \`node csfd-rate.mjs watchlist --all\`. Nálada: ${moodStr}.${lengthNote} Vyber 3 tituly které nejlépe sedí — u každého krátce (1 řádek) proč se hodí, plus pokud snadno zjistíš, doplň délku + žánr + rok.`,
+    label: `Doporuč film (${shortMood}${shortLen} · ${sourceLabel})`,
+    prompt: promptBody,
   };
 }
 

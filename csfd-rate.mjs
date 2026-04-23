@@ -5,7 +5,10 @@
  * CLI:
  *   node csfd-rate.mjs rate <csfd-url-nebo-id> <hvezdicky-1-5>
  *   node csfd-rate.mjs check <csfd-url-nebo-id>
- *   node csfd-rate.mjs watchlist [--all] [--no-cache]
+ *   node csfd-rate.mjs watchlist [--all] [--no-cache] [--genre=<id|nazev>[,<id|nazev>...]]
+ *     --genre=horor                 — jen horory
+ *     --genre=horor,komedie         — průnik (filmy mající oba žánry)
+ *     --genre=5                     — alias přes ID
  *   node csfd-rate.mjs watchlist-add <csfd-url-nebo-id> [poznamka]
  *   node csfd-rate.mjs watchlist-remove <csfd-url-nebo-id>
  *   node csfd-rate.mjs logout              (smaže login state + watchlist cache)
@@ -25,6 +28,29 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const STATE_FILE = path.join(SCRIPT_DIR, '.csfd-state.json');
 const WATCHLIST_CACHE = path.join(SCRIPT_DIR, '.csfd-watchlist-cache.json');
 const WATCHLIST_TTL_MS = (parseInt(process.env.CSFD_CACHE_TTL_SEC, 10) || 600) * 1000; // default 10 min
+
+// ČSFD genre ID → název (z <select name="genre"> na watchlist stránce)
+const GENRE_IDS = {
+  'ai-film': 47, 'akcni': 1, 'animovany': 3, 'dobrodruzny': 11, 'dokumentarni': 13,
+  'drama': 2, 'eroticky': 45, 'experimentalni': 26, 'fantasy': 4, 'film-noir': 20,
+  'historicky': 21, 'horor': 5, 'hudebni': 22, 'imax': 28, 'katastroficky': 39,
+  'komedie': 9, 'kratkometrazni': 14, 'krimi': 18, 'loutkovy': 23, 'muzikal': 12,
+  'mysteriozni': 16, 'naucny': 44, 'podobenstvi': 25, 'poeticky': 27, 'pohadka': 30,
+  'pornograficky': 10, 'povidkovy': 29, 'psychologicky': 31, 'publicisticky': 33,
+  'reality-tv': 35, 'road-movie': 40, 'rodinny': 6, 'romanticky': 15, 'sci-fi': 7,
+  'soutezni': 36, 'sportovni': 32, 'stand-up': 43, 'talk-show': 34, 'tanecni': 41,
+  'telenovela': 38, 'thriller': 8, 'valecny': 17, 'vr-film': 46, 'western': 19,
+  'zabavny': 42, 'zivotopisny': 37,
+};
+
+// Převede "horor" → 5, "5" → 5. Vrací number nebo null.
+function resolveGenre(input) {
+  if (!input) return null;
+  const s = String(input).trim().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, ''); // diakritika → ascii
+  if (/^\d+$/.test(s)) return parseInt(s, 10);
+  return GENRE_IDS[s] ?? null;
+}
 
 // --- Helpers ---
 
@@ -224,11 +250,49 @@ function invalidateWatchlistCache() {
   if (fs.existsSync(WATCHLIST_CACHE)) fs.unlinkSync(WATCHLIST_CACHE);
 }
 
-export async function getWatchlist({ allPages = false, noCache = false } = {}) {
-  if (!noCache) {
+async function fetchWatchlistPage(page, context, { genre, pageNum }) {
+  const params = new URLSearchParams({ sort: 'inserted' });
+  if (genre) params.set('genre', String(genre));
+  if (pageNum > 1) params.set('page', String(pageNum));
+  const url = `https://www.csfd.cz/soukrome/chci-videt/?${params.toString()}`;
+  await gotoAuth(page, context, url, '.film-title-nooverflow, .box-empty, .content');
+
+  const pageFilms = await page.$$eval('.film-title-nooverflow', els =>
+    els.map(el => {
+      const link = el.querySelector('a');
+      if (!link) return null;
+      const href = link.getAttribute('href');
+      const match = href?.match(/\/film\/(\d+)-/);
+      return {
+        title: link.textContent?.trim(),
+        href,
+        csfdId: match ? parseInt(match[1], 10) : null,
+      };
+    }).filter(Boolean)
+  );
+
+  const hasNext = await page.locator('.box-more-bar a.page-next').count();
+  return { films: pageFilms, hasNext: hasNext > 0 };
+}
+
+async function fetchGenreFilms(page, context, genre) {
+  const films = [];
+  const MAX_PAGES = 50;
+  for (let p = 1; p <= MAX_PAGES; p++) {
+    const { films: pageFilms, hasNext } = await fetchWatchlistPage(page, context, { genre, pageNum: p });
+    films.push(...pageFilms);
+    if (!hasNext) break;
+  }
+  return films;
+}
+
+// Multi-genre filter = průnik (ČSFD URL neumí kombinovat žánry, proto fetch per žánr + intersect).
+export async function getWatchlist({ allPages = false, noCache = false, genres = [] } = {}) {
+  // Cache používáme jen pro unfiltered fetch — filtry jsou ad-hoc.
+  if (!genres.length && !noCache) {
     const cached = readWatchlistCache(allPages);
     if (cached) {
-      const films = allPages ? cached.films : cached.films.slice(0, 20); // první stránka = prvních ~20
+      const films = allPages ? cached.films : cached.films.slice(0, 20);
       return { films, pages: cached.pages, total: films.length, fromCache: true, cachedAt: cached.timestamp };
     }
   }
@@ -236,33 +300,25 @@ export async function getWatchlist({ allPages = false, noCache = false } = {}) {
   const { browser, context, page } = await createSession();
 
   try {
+    // Multi-genre → průnik. Single genre → stáhni všechny stránky daného žánru.
+    if (genres.length > 0) {
+      const perGenre = [];
+      for (const g of genres) {
+        perGenre.push(await fetchGenreFilms(page, context, g));
+      }
+      const idSets = perGenre.map(arr => new Set(arr.map(f => f.csfdId)));
+      const films = perGenre[0].filter(f => idSets.every(s => s.has(f.csfdId)));
+      return { films, pages: null, total: films.length, genres };
+    }
+
+    // Unfiltered (původní chování).
     const films = [];
     let currentPage = 1;
-
-    while (true) {
-      const url = `https://www.csfd.cz/soukrome/chci-videt/?page=${currentPage}&sort=inserted`;
-      await gotoAuth(page, context, url, '.film-title-nooverflow, .box-empty, .content');
-
-      const pageFilms = await page.$$eval('.film-title-nooverflow', els =>
-        els.map(el => {
-          const link = el.querySelector('a');
-          if (!link) return null;
-          const href = link.getAttribute('href');
-          const match = href?.match(/\/film\/(\d+)-/);
-          return {
-            title: link.textContent?.trim(),
-            href,
-            csfdId: match ? parseInt(match[1], 10) : null,
-          };
-        }).filter(Boolean)
-      );
-
+    const MAX_PAGES = 50;
+    while (currentPage <= MAX_PAGES) {
+      const { films: pageFilms, hasNext } = await fetchWatchlistPage(page, context, { pageNum: currentPage });
       films.push(...pageFilms);
-
-      if (!allPages) break;
-
-      const hasNext = await page.locator('a:has-text("další")').count();
-      if (hasNext === 0) break;
+      if (!allPages || !hasNext) break;
       currentPage++;
     }
 
@@ -382,10 +438,28 @@ if (command === 'rate') {
 } else if (command === 'watchlist') {
   const allPages = args.includes('--all');
   const noCache = args.includes('--no-cache');
-  console.log(allPages ? 'Načítám celý watchlist...' : 'Načítám první stránku watchlistu...');
-  const result = await getWatchlist({ allPages, noCache });
+  // --genre=horor nebo --genre=5 nebo --genre=horor,komedie (průnik)
+  const genreArg = args.find(a => a.startsWith('--genre='))?.slice('--genre='.length);
+  const genres = genreArg
+    ? genreArg.split(',').map(s => resolveGenre(s)).filter(g => g != null)
+    : [];
+  const invalidGenres = genreArg ? genreArg.split(',').filter(s => resolveGenre(s) == null) : [];
+  if (invalidGenres.length) {
+    console.error(`Neznámé žánry: ${invalidGenres.join(', ')}. Zkus číselné ID nebo např. horor, komedie, sci-fi, thriller, ...`);
+    process.exit(1);
+  }
+
+  if (genres.length) {
+    console.log(`Načítám watchlist s filtrem žánrů: ${genreArg}...`);
+  } else {
+    console.log(allPages ? 'Načítám celý watchlist...' : 'Načítám první stránku watchlistu...');
+  }
+  const result = await getWatchlist({ allPages, noCache, genres });
   const age = result.fromCache ? ` (z cache, stáří ${Math.round((Date.now() - result.cachedAt) / 1000)}s)` : '';
-  console.log(`\n${result.total} filmů${allPages ? '' : ' (stránka 1)'}${age}:\n`);
+  const scopeNote = genres.length
+    ? (genres.length === 1 ? ` (žánr ${genreArg})` : ` (průnik ${genres.length} žánrů: ${genreArg})`)
+    : (allPages ? '' : ' (stránka 1)');
+  console.log(`\n${result.total} filmů${scopeNote}${age}:\n`);
   for (const film of result.films) {
     console.log(`  ${film.title}  https://www.csfd.cz${film.href}`);
   }
