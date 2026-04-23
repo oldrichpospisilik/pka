@@ -162,7 +162,7 @@ wiki/                   ← zpracované stránky udržované Claudem
   
   Zábavní obsah (knihy, filmy, hry, divadlo) sem **nepatří** — i když se kupují, patří do `kultura/` nebo `gaming/`. Hranice: utilitární věc (používám ji k něčemu) = nakupy, zábavní konzum (čtu ji / hraju ji / dívám se na ni) = kultura/gaming.
 - **recepty/** — zajímavé recepty k vyzkoušení i ověřené oblíbené. Každý recept má tagy pro rychlé filtrování (kuchyně, typ jídla, náročnost, hlavní surovina, dieta, nálada). Když řeknu že mám na něco chuť, doporuč mi pasující recept podle tagů.
-- **lab/** — nástroje k vyzkoušení, experimenty, podklady, todo. Každý nástroj má vlastní stránku s poznámkami z testování.
+- **lab/** — nástroje k vyzkoušení, experimenty, podklady, todo. Každý nástroj má vlastní stránku s poznámkami z testování. **Experimenty jsou zárodky projektů** — mnoho z nich má konkrétní cíl a scope (firemní wiki, vykazovák, Hetzner asistent, Tamagotchi...), takže `lab/` slouží i jako projektový rozcestník, ne jen sandbox.
 
 ## Ingest workflow
 
