@@ -5,6 +5,12 @@ Semver: `MAJOR.MINOR.PATCH`.
 - **MINOR** — nové feature, zpětně kompatibilní
 - **PATCH** — bugfixy, drobné úpravy
 
+## 2.1.2 — 2026-04-23
+
+### Opravy
+- **Pin do wiki 📌 už reálně zapisuje.** Bridge spouští `claude -p` s `--permission-mode acceptEdits` — v headless módu se Write/Edit jinak zastaví na interaktivním potvrzení (které nemá kdo stisknout) a Pekáček to pak překládá do *"Potřebuji přístup pro čtení a zápis do wiki"*.
+- **User settings allowlist**: přejmenována stará cesta `/home/oposp/wiki/wiki/**` → `/home/oposp/pka/wiki/**` (zbytek po wiki→pka rename). Doplněny i `Edit(...)` patterny pro obě cesty (pCloud + WSL symlink).
+
 ## 2.1.1 — 2026-04-23
 
 ### Nové

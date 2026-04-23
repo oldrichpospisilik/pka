@@ -156,6 +156,7 @@ const server = http.createServer(async (req, res) => {
 
         const args = [
           "-p", prompt,
+          "--permission-mode", "acceptEdits",
           "--output-format", "stream-json",
           "--verbose",
           "--include-partial-messages",
