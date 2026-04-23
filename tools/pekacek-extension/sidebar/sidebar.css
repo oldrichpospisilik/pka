@@ -634,7 +634,53 @@ body {
 }
 
 #quick-menu {
-  min-width: 180px;
+  min-width: 240px;
+}
+
+/* --- Chips (pro film mood picker v quick dropdown) --- */
+
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 4px 6px 2px;
+}
+
+.chip {
+  background: transparent;
+  border: 1px solid var(--text-muted);
+  color: var(--text);
+  padding: 3px 7px;
+  border-radius: 11px;
+  font-family: var(--sans);
+  font-size: 10.5px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.1s;
+}
+
+.chip:hover {
+  border-color: var(--green);
+  background: var(--bg-card);
+}
+
+.chip.active {
+  background: rgba(78, 204, 163, 0.2);
+  border-color: var(--green);
+  color: var(--green);
+}
+
+/* Highlight action button (Doporuč film) */
+.dropdown-action {
+  background: rgba(78, 204, 163, 0.12);
+  border: 1px solid var(--green) !important;
+  text-align: center !important;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.dropdown-action:hover {
+  background: rgba(78, 204, 163, 0.28) !important;
 }
 
 /* --- Scrollbar --- */

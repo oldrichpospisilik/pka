@@ -354,20 +354,51 @@ document.addEventListener("click", (e) => {
   if (!e.target.closest(".action-dropdown, #quick-dropdown")) closeAllDropdowns();
 });
 
+// --- Film mood/length picker builder ---
+const FILM_MOOD_DESC = {
+  oddychove: "oddychové / chill / nic těžkého",
+  akcni: "akční / adrenalinové",
+  napinave: "napínavé (chci se bát — thrillery, horor, napětí)",
+  hlubsi: "přemýšlivé / náročné / drama / intenzivní",
+  humor: "humor / komedie",
+  romanticke: "romantické",
+  feelgood: "feel-good / pohlazení po duši",
+  temne: "temné / mrazivé atmosféry",
+  vizualni: "vizuálně pěkné (kamera, design, estetika)",
+};
+const FILM_MOOD_SHORT = {
+  oddychove: "oddych", akcni: "akce", napinave: "bát se", hlubsi: "hlubší",
+  humor: "humor", romanticke: "roman", feelgood: "feel-good", temne: "temné", vizualni: "vizuální",
+};
+const FILM_LENGTH_DESC = {
+  short: "kratší (pod 90 min)",
+  standard: "standardní délka (90–120 min)",
+  long: "delší (nad 120 min)",
+  any: "jakákoliv délka",
+};
+
+function buildFilmPrompt() {
+  const moods = [...document.querySelectorAll("#film-moods .chip.active")].map((c) => c.dataset.mood);
+  const length = document.querySelector("#film-length .chip.active")?.dataset.length || "any";
+
+  const moodStr = moods.length > 0
+    ? moods.map((m) => FILM_MOOD_DESC[m]).join("; ")
+    : "bez konkrétní náladové preference — vybírej univerzálně";
+  const lengthNote = length === "any" ? "" : ` Délka: ${FILM_LENGTH_DESC[length]}.`;
+
+  const shortMood = moods.length > 0
+    ? moods.map((m) => FILM_MOOD_SHORT[m]).join(" + ")
+    : "libovolné";
+  const shortLen = length === "any" ? "" : ` · ${FILM_LENGTH_DESC[length]}`;
+
+  return {
+    label: `Doporuč film (${shortMood}${shortLen})`,
+    prompt: `Doporuč mi film z mého ČSFD watchlistu. Nejdřív zkontroluj seznam pomocí \`node csfd-rate.mjs watchlist --all\`. Nálada: ${moodStr}.${lengthNote} Vyber 3 tituly které nejlépe sedí — u každého krátce (1 řádek) proč se hodí, plus pokud snadno zjistíš, doplň délku + žánr + rok.`,
+  };
+}
+
 // --- Quick action prompts ---
 const QUICK_ACTIONS = {
-  "film-chill": {
-    label: "Doporuč film z watchlistu — chill/oddychové",
-    prompt: "Doporuč mi film z mého ČSFD watchlistu na chill oddychový večer. Zkontroluj seznam pomocí `node csfd-rate.mjs watchlist --all`, vyber 3 tituly které sedí k náladě (lehké, oddychové, nic těžkého). U každého krátce proč se hodí.",
-  },
-  "film-action": {
-    label: "Doporuč film z watchlistu — akční/napínavé",
-    prompt: "Doporuč mi film z mého ČSFD watchlistu na akční nebo napínavý večer. Zkontroluj seznam pomocí `node csfd-rate.mjs watchlist --all`, vyber 3 tituly (akce, thriller, napětí). U každého krátce proč.",
-  },
-  "film-brainy": {
-    label: "Doporuč film z watchlistu — přemýšlivé",
-    prompt: "Doporuč mi film z mého ČSFD watchlistu na večer kdy chci něco nad čím se zamyslet. Zkontroluj seznam pomocí `node csfd-rate.mjs watchlist --all`, vyber 3 tituly (drama, sci-fi s myšlenkou, náročné). U každého krátce proč.",
-  },
   "food-fast": {
     label: "Mám chuť na rychlovku",
     prompt: "Mám chuť na něco rychlého (do 20–30 min přípravy). Co mi nabízí `wiki/recepty/`? Doporuč 2–3 pasující podle tagů (`Čas`, `Nálada: rychlovka`), preferuj `oblíbené` a `vyzkoušeno` před `chci-vyzkoušet`.",
@@ -408,10 +439,26 @@ document.getElementById("quick-btn").addEventListener("click", (e) => {
 });
 
 document.getElementById("quick-menu").addEventListener("click", (e) => {
+  // Chip toggles (neuzavírej menu, jen přepni stav)
+  const chip = e.target.closest(".chip");
+  if (chip) {
+    const group = chip.closest(".chip-group");
+    if (group?.classList.contains("chip-single")) {
+      group.querySelectorAll(".chip").forEach((c) => c.classList.remove("active"));
+      chip.classList.add("active");
+    } else {
+      chip.classList.toggle("active");
+    }
+    return;
+  }
+
+  // Akční položky v menu — zavři menu a odešli prompt
   const item = e.target.closest(".dropdown-item[data-quick]");
   if (!item) return;
   closeAllDropdowns();
-  const qa = QUICK_ACTIONS[item.dataset.quick];
+
+  const quickId = item.dataset.quick;
+  const qa = quickId === "film-custom" ? buildFilmPrompt() : QUICK_ACTIONS[quickId];
   if (!qa) return;
   addMessage("user", qa.label);
   sendToBridge(qa.prompt, { action: "quick" });

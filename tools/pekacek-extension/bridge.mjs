@@ -379,7 +379,7 @@ checkEnvironment();
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`
   ╔══════════════════════════════════════╗
-  ║   Pekáček Bridge v2.3.1             ║
+  ║   Pekáček Bridge v2.4.0             ║
   ║   http://localhost:${PORT}/             ║
   ║                                      ║
   ║   ( o_o) ☕  Čekám na extension...   ║

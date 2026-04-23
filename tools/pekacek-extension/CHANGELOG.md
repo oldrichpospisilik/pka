@@ -5,6 +5,15 @@ Semver: `MAJOR.MINOR.PATCH`.
 - **MINOR** — nové feature, zpětně kompatibilní
 - **PATCH** — bugfixy, drobné úpravy
 
+## 2.4.0 — 2026-04-23
+
+### Nové
+- **Filmový picker s multi-select chipy.** Místo 3 předpečených tlačítek (chill / akční / přemýšlivé) teď v ⚡ dropdownu sekce "Filmy — co mi pustíš?":
+  - **Nálada (multi-select)**: 😌 oddych · 🔥 akce · 😱 bát se · 🧠 hlubší · 😂 humor · 💕 roman · ☀️ feel-good · 🌑 temné · 🎨 vizuální. Toggle kliknutím, kombinuj libovolně.
+  - **Délka (single-select)**: &lt;90 · 90–120 · &gt;120 · libovolná (default).
+  - **Doporuč film (podle výběru)** — tlačítko pod chipy. Pošle prompt s přesnými kritérii (mood popisy + délka) a popíská user message tak, abys v chatu viděl co přesně jsi hledal (např. *"Doporuč film (akce + bát se · kratší)"*).
+- **Chip UI komponenta** — reusable `.chip` + `.chip-group.chip-multi / .chip-single` pro budoucí filtry (recepty, knihy…).
+
 ## 2.3.1 — 2026-04-23
 
 ### Opravy

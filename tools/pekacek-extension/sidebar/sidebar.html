@@ -79,15 +79,26 @@
     <div id="quick-dropdown">
       <button id="quick-btn" title="Rychlé akce">&#x26A1;</button>
       <div id="quick-menu" class="dropdown-menu dropdown-up">
-        <div class="dropdown-header">Filmy (z ČSFD watchlistu)</div>
-        <button class="dropdown-item" data-quick="film-chill">
-          <span class="btn-icon">&#x1F60C;</span> Chill/oddychové
-        </button>
-        <button class="dropdown-item" data-quick="film-action">
-          <span class="btn-icon">&#x1F525;</span> Akční/napínavé
-        </button>
-        <button class="dropdown-item" data-quick="film-brainy">
-          <span class="btn-icon">&#x1F9E0;</span> Přemýšlivé/náročné
+        <div class="dropdown-header">Filmy — co mi pustíš?</div>
+        <div class="chip-group chip-multi" id="film-moods">
+          <button class="chip" data-mood="oddychove" title="Chill, pohodové, nic těžkého">&#x1F60C; oddych</button>
+          <button class="chip" data-mood="akcni" title="Akční, adrenalin">&#x1F525; akce</button>
+          <button class="chip" data-mood="napinave" title="Chci se bát — thrillery, horor, napětí">&#x1F631; bát se</button>
+          <button class="chip" data-mood="hlubsi" title="Přemýšlivé, náročné drama">&#x1F9E0; hlubší</button>
+          <button class="chip" data-mood="humor" title="Komedie, sranda">&#x1F602; humor</button>
+          <button class="chip" data-mood="romanticke" title="Romantika">&#x1F495; roman</button>
+          <button class="chip" data-mood="feelgood" title="Feel-good, pohlazení po duši">&#x2600;&#xFE0F; feel-good</button>
+          <button class="chip" data-mood="temne" title="Temné, mrazivé atmosféry">&#x1F311; temné</button>
+          <button class="chip" data-mood="vizualni" title="Vizuálně pěkné, kamera, design">&#x1F3A8; vizuální</button>
+        </div>
+        <div class="chip-group chip-single" id="film-length" title="Délka filmu">
+          <button class="chip" data-length="short">&lt;90</button>
+          <button class="chip" data-length="standard">90–120</button>
+          <button class="chip" data-length="long">&gt;120</button>
+          <button class="chip active" data-length="any">libovolná</button>
+        </div>
+        <button class="dropdown-item dropdown-action" data-quick="film-custom">
+          <span class="btn-icon">&#x1F3AC;</span> Doporuč film (podle výběru)
         </button>
 
         <div class="dropdown-header">Recepty (mám chuť na...)</div>
