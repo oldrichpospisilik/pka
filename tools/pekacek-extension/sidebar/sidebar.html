@@ -76,6 +76,43 @@
 
   <!-- Input -->
   <div id="input-area">
+    <div id="quick-dropdown">
+      <button id="quick-btn" title="Rychlé akce">&#x26A1;</button>
+      <div id="quick-menu" class="dropdown-menu dropdown-up">
+        <div class="dropdown-header">Filmy (z ČSFD watchlistu)</div>
+        <button class="dropdown-item" data-quick="film-chill">
+          <span class="btn-icon">&#x1F60C;</span> Chill/oddychové
+        </button>
+        <button class="dropdown-item" data-quick="film-action">
+          <span class="btn-icon">&#x1F525;</span> Akční/napínavé
+        </button>
+        <button class="dropdown-item" data-quick="film-brainy">
+          <span class="btn-icon">&#x1F9E0;</span> Přemýšlivé/náročné
+        </button>
+
+        <div class="dropdown-header">Recepty (mám chuť na...)</div>
+        <button class="dropdown-item" data-quick="food-fast">
+          <span class="btn-icon">&#x26A1;</span> Rychlovku
+        </button>
+        <button class="dropdown-item" data-quick="food-comfort">
+          <span class="btn-icon">&#x1F35C;</span> Comfort food
+        </button>
+        <button class="dropdown-item" data-quick="food-healthy">
+          <span class="btn-icon">&#x1F957;</span> Něco zdravého
+        </button>
+
+        <div class="dropdown-header">Z wiki</div>
+        <button class="dropdown-item" data-quick="lab">
+          <span class="btn-icon">&#x1F9EA;</span> Co dneska z labu?
+        </button>
+        <button class="dropdown-item" data-quick="articles">
+          <span class="btn-icon">&#x1F4F0;</span> Co dnes číst?
+        </button>
+        <button class="dropdown-item" data-quick="today">
+          <span class="btn-icon">&#x1F4C5;</span> Co mám dneska?
+        </button>
+      </div>
+    </div>
     <textarea id="user-input" placeholder="Zeptej se Pekáčka..." rows="2"></textarea>
     <button id="send-btn" title="Odeslat">&#x27A4;</button>
   </div>

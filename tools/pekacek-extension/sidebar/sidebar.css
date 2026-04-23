@@ -348,6 +348,27 @@ body {
   right: 0;
 }
 
+/* Dropdown that opens upward (for buttons near bottom edge) */
+.dropdown-menu.dropdown-up {
+  top: auto;
+  bottom: calc(100% + 3px);
+}
+
+/* Section header inside dropdown */
+.dropdown-header {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 5px 8px 2px;
+  margin-top: 2px;
+  border-top: 1px solid var(--text-muted);
+}
+.dropdown-header:first-child {
+  border-top: none;
+  margin-top: 0;
+}
+
 .dropdown-menu.open {
   display: flex;
 }
@@ -582,6 +603,38 @@ body {
 
 #send-btn:active {
   transform: scale(0.95);
+}
+
+/* --- Quick dropdown (⚡) near send button --- */
+
+#quick-dropdown {
+  position: relative;
+  align-self: flex-end;
+}
+
+#quick-btn {
+  padding: 8px 10px;
+  border: 1px solid var(--text-muted);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+#quick-btn:hover {
+  border-color: var(--green);
+  background: var(--bg-card);
+}
+
+#quick-btn.open {
+  border-color: var(--green);
+  background: var(--bg-card);
+}
+
+#quick-menu {
+  min-width: 180px;
 }
 
 /* --- Scrollbar --- */

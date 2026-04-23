@@ -348,10 +348,73 @@ document.addEventListener("visibilitychange", () => {
 // --- Dropdown toggles ---
 function closeAllDropdowns() {
   document.querySelectorAll(".dropdown-menu.open").forEach((m) => m.classList.remove("open"));
-  document.querySelectorAll(".dropdown-toggle.open").forEach((t) => t.classList.remove("open"));
+  document.querySelectorAll(".dropdown-toggle.open, #quick-btn.open").forEach((t) => t.classList.remove("open"));
 }
 document.addEventListener("click", (e) => {
-  if (!e.target.closest(".action-dropdown")) closeAllDropdowns();
+  if (!e.target.closest(".action-dropdown, #quick-dropdown")) closeAllDropdowns();
+});
+
+// --- Quick action prompts ---
+const QUICK_ACTIONS = {
+  "film-chill": {
+    label: "Doporuč film z watchlistu — chill/oddychové",
+    prompt: "Doporuč mi film z mého ČSFD watchlistu na chill oddychový večer. Zkontroluj seznam pomocí `node csfd-rate.mjs watchlist --all`, vyber 3 tituly které sedí k náladě (lehké, oddychové, nic těžkého). U každého krátce proč se hodí.",
+  },
+  "film-action": {
+    label: "Doporuč film z watchlistu — akční/napínavé",
+    prompt: "Doporuč mi film z mého ČSFD watchlistu na akční nebo napínavý večer. Zkontroluj seznam pomocí `node csfd-rate.mjs watchlist --all`, vyber 3 tituly (akce, thriller, napětí). U každého krátce proč.",
+  },
+  "film-brainy": {
+    label: "Doporuč film z watchlistu — přemýšlivé",
+    prompt: "Doporuč mi film z mého ČSFD watchlistu na večer kdy chci něco nad čím se zamyslet. Zkontroluj seznam pomocí `node csfd-rate.mjs watchlist --all`, vyber 3 tituly (drama, sci-fi s myšlenkou, náročné). U každého krátce proč.",
+  },
+  "food-fast": {
+    label: "Mám chuť na rychlovku",
+    prompt: "Mám chuť na něco rychlého (do 20–30 min přípravy). Co mi nabízí `wiki/recepty/`? Doporuč 2–3 pasující podle tagů (`Čas`, `Nálada: rychlovka`), preferuj `oblíbené` a `vyzkoušeno` před `chci-vyzkoušet`.",
+  },
+  "food-comfort": {
+    label: "Mám chuť na comfort food",
+    prompt: "Mám chuť na comfort food. Co mi nabízí `wiki/recepty/`? Doporuč 2–3 pasující podle `Nálada: comfort food`, preferuj `oblíbené` a `vyzkoušeno`.",
+  },
+  "food-healthy": {
+    label: "Mám chuť na něco zdravého",
+    prompt: "Mám chuť na něco zdravého / lehkého. Co mi nabízí `wiki/recepty/`? Doporuč 2–3 pasující (vegetariánské, saláty, `Nálada: zdravé`), preferuj `oblíbené` a `vyzkoušeno`.",
+  },
+  "lab": {
+    label: "Co dneska z labu?",
+    prompt: "Podívej se do `wiki/lab/index.md` a souvisejících lab stránek. Doporuč mi jeden konkrétní experiment nebo úkol který by šlo dneska posunout — podle zralosti, rozpracovanosti a toho co by šlo reálně dotáhnout. Stručně proč právě tenhle a jaký by byl první krok.",
+  },
+  "articles": {
+    label: "Co dnes číst z nepřečtených článků?",
+    prompt: "Co mám nepřečtené v `wiki/clanky/` (status: chci-precist)? Doporuč mi 3 články které bych si dnes mohl přečíst — krátký název + řádek proč právě tenhle. Zohledni že mám omezený čas, tak zvol mix lehčích + jednoho náročnějšího.",
+  },
+  "today": {
+    label: "Co mám dneska?",
+    prompt: "Co mám dnes za události v kalendáři a nepřečtené důležité emaily? Krátký souhrn toho co stojí za pozornost — bez blabolu, jen podstata.",
+  },
+};
+
+// --- Quick dropdown (⚡ u send buttonu) ---
+document.getElementById("quick-btn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  const menu = document.getElementById("quick-menu");
+  const btn = e.currentTarget;
+  const wasOpen = menu.classList.contains("open");
+  closeAllDropdowns();
+  if (!wasOpen) {
+    menu.classList.add("open");
+    btn.classList.add("open");
+  }
+});
+
+document.getElementById("quick-menu").addEventListener("click", (e) => {
+  const item = e.target.closest(".dropdown-item[data-quick]");
+  if (!item) return;
+  closeAllDropdowns();
+  const qa = QUICK_ACTIONS[item.dataset.quick];
+  if (!qa) return;
+  addMessage("user", qa.label);
+  sendToBridge(qa.prompt, { action: "quick" });
 });
 
 // --- Actions ---
@@ -528,6 +591,7 @@ const THINKING_MESSAGES = {
   technical: ["Vytahuju detaily...", "Hledám přesné termíny...", "Edge cases a trade-offs...", "Bez zjednodušování..."],
   ingest:     ["Čtu článek...", "Určuju kategorii...", "Vytvářím stránku...", "Propojuju s wiki..."],
   pin:        ["Určuju kategorii...", "Vytvářím stránku...", "Updatuju index...", "Zapisuju do logu..."],
+  quick:      ["Koukám...", "Hledám to nejlepší...", "Procházím seznam...", "Zvažuju možnosti..."],
   read:       ["Čtu článek...", "Zpracovávám myšlenky...", "Formuluju názor...", "Hledám zajímavé...", "Skoro hotovo..."],
   default:    ["Přemýšlím...", "Ještě chvilku...", "Skoro to mám...", "Formuluju..."],
 };

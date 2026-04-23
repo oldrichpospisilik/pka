@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Pekáček — Reading Companion",
-  "version": "2.2.2",
+  "version": "2.3.0",
   "description": "PKA osobní znalostní asistent — sidebar pro čtení, souhrny, protimyšlenky a wiki ingest.",
   "permissions": [
     "sidePanel",

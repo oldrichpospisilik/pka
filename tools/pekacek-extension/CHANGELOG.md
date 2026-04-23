@@ -5,6 +5,16 @@ Semver: `MAJOR.MINOR.PATCH`.
 - **MINOR** — nové feature, zpětně kompatibilní
 - **PATCH** — bugfixy, drobné úpravy
 
+## 2.3.0 — 2026-04-23
+
+### Nové
+- **⚡ Rychlé akce u send buttonu** — dropdown vlevo od textarea s pre-pečenými prompty pro časté dotazy. Otevírá se nahoru (je u dolní hrany). Sekce:
+  - **Filmy** (z ČSFD watchlistu): 😌 Chill/oddychové · 🔥 Akční/napínavé · 🧠 Přemýšlivé. Každá varianta spustí `csfd-rate.mjs watchlist --all` a doporučí 3 tituly pasující k náladě.
+  - **Recepty** (mám chuť na…): ⚡ Rychlovku · 🍜 Comfort food · 🥗 Něco zdravého. Filtruje `wiki/recepty/` podle tagů, preferuje oblíbené + vyzkoušené.
+  - **Z wiki**: 🧪 Co dneska z labu? (doporučí jeden experiment z `lab/` na dotažení) · 📰 Co dnes číst? (3 tipy z `clanky/` se statusem `chci-precist`) · 📅 Co mám dneska? (kalendář + důležité nepřečtené emaily).
+- **Dropdown sekce s header-y** — `.dropdown-header` pro oddělení skupin (malý uppercase text, čára mezi sekcemi).
+- **`.dropdown-up`** CSS utility pro menu otevírající se nad tlačítkem.
+
 ## 2.2.2 — 2026-04-23
 
 ### Opravy
