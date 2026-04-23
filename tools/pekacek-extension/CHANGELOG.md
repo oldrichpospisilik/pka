@@ -5,6 +5,23 @@ Semver: `MAJOR.MINOR.PATCH`.
 - **MINOR** — nové feature, zpětně kompatibilní
 - **PATCH** — bugfixy, drobné úpravy
 
+## 2.2.1 — 2026-04-23
+
+### Konsolidace akčních tlačítek — **5 buttonů místo 9**
+
+Top bar je teď: **📋 Souhrn · 🤔 Proti · 🧪 Zkus · 🎓 Vysvětli ▾ · 💾 Uložit ▾**
+
+- **🎓 Vysvětli ▾ dropdown rozšířen** — Analogie + Diagram přesunuté pod něj. Všechny "vysvětli to nějak" módy pod jednou střechou:
+  - 👶 Jako pětiletému
+  - 🧒 Zjednodušeně
+  - 🔬 Odborně
+  - 💡 Pomocí analogií
+  - 📊 Nakreslit diagram
+- **💾 Uložit ▾ dropdown** — Ingest + Raw sloučené do jednoho dropdownu:
+  - 📚 Do wiki (ingest) — zpracuje článek a vytvoří wiki stránku
+  - 🗂️ Do _raw (na pozdějc) — uloží URL do Chrome záložek pro pozdější ingest
+- **Ikona Zkus** změněna z 🔬 (mikroskop) na 🧪 (zkumavka) — víc odpovídá "experimentu" a nekonflikuje s 🔬 Odborně.
+
 ## 2.2.0 — 2026-04-23
 
 ### Změny akčních tlačítek

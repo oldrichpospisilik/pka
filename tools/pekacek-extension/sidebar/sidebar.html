@@ -30,13 +30,7 @@
       <span class="btn-icon">&#x1F914;</span> Proti
     </button>
     <button class="action-btn" data-action="experiment" title="Experimenty k vyzkoušení">
-      <span class="btn-icon">&#x1F52C;</span> Zkus
-    </button>
-    <button class="action-btn" data-action="analogy" title="Vysvětli pomocí analogií a jednoduchých příkladů">
-      <span class="btn-icon">&#x1F4A1;</span> Analogie
-    </button>
-    <button class="action-btn" data-action="diagram" title="Nakresli ASCII diagram konceptu">
-      <span class="btn-icon">&#x1F4CA;</span> Diagram
+      <span class="btn-icon">&#x1F9EA;</span> Zkus
     </button>
     <div class="action-dropdown">
       <button class="action-btn dropdown-toggle" data-dropdown="explain" title="Vysvětli...">
@@ -52,14 +46,27 @@
         <button class="dropdown-item" data-action="technical" title="Odborně, s technickými detaily">
           <span class="btn-icon">&#x1F52C;</span> Odborně
         </button>
+        <button class="dropdown-item" data-action="analogy" title="Pomocí analogií a přirovnání">
+          <span class="btn-icon">&#x1F4A1;</span> Pomocí analogií
+        </button>
+        <button class="dropdown-item" data-action="diagram" title="Nakreslit ASCII diagram">
+          <span class="btn-icon">&#x1F4CA;</span> Nakreslit diagram
+        </button>
       </div>
     </div>
-    <button class="action-btn action-ingest" data-action="ingest" title="Ingestuj přímo do wiki">
-      <span class="btn-icon">&#x1F4DA;</span> Ingest
-    </button>
-    <button class="action-btn action-save" data-action="save" title="Uložit do _raw záložek">
-      <span class="btn-icon">&#x1F4BE;</span> Raw
-    </button>
+    <div class="action-dropdown">
+      <button class="action-btn action-save dropdown-toggle" data-dropdown="save" title="Uložit...">
+        <span class="btn-icon">&#x1F4BE;</span> Uložit <span class="caret">▾</span>
+      </button>
+      <div class="dropdown-menu" id="dropdown-save">
+        <button class="dropdown-item" data-action="ingest" title="Zpracovat článek a vytvořit wiki stránku">
+          <span class="btn-icon">&#x1F4DA;</span> Do wiki (ingest)
+        </button>
+        <button class="dropdown-item" data-action="save" title="Uložit URL do _raw záložek pro pozdější zpracování">
+          <span class="btn-icon">&#x1F5C2;&#xFE0F;</span> Do _raw (na pozdějc)
+        </button>
+      </div>
+    </div>
   </div>
 
   <!-- Chat area -->
