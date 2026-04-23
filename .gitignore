@@ -25,3 +25,7 @@ Bookmarks.backup.*
 
 # Lokální Claude Code nastavení (cesty specifické pro stroj)
 .claude/settings.local.json
+
+# ČSFD tool state (cookies + cache — citlivé)
+.csfd-state.json
+.csfd-watchlist-cache.json
