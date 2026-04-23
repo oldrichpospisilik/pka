@@ -5,6 +5,11 @@ Semver: `MAJOR.MINOR.PATCH`.
 - **MINOR** — nové feature, zpětně kompatibilní
 - **PATCH** — bugfixy, drobné úpravy
 
+## 2.1.3 — 2026-04-23
+
+### Opravy
+- **`--add-dir /mnt/p/Wiki/Wiki` pro Pin do wiki.** v2.1.2 přidal `acceptEdits`, ale wiki je symlink `~/pka/wiki` → `/mnt/p/Wiki/Wiki` — po resolve mimo cwd, takže Claude Code v headless módu stále blokoval. `--add-dir` přidává pCloud cestu jako další povolený working directory.
+
 ## 2.1.2 — 2026-04-23
 
 ### Opravy

@@ -157,6 +157,7 @@ const server = http.createServer(async (req, res) => {
         const args = [
           "-p", prompt,
           "--permission-mode", "acceptEdits",
+          "--add-dir", "/mnt/p/Wiki/Wiki",
           "--output-format", "stream-json",
           "--verbose",
           "--include-partial-messages",
