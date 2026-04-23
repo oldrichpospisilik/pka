@@ -27,6 +27,91 @@ const articleCache = new Map();
 // Active /ask requests that can be stopped: reqId -> { proc, res, log }
 const activeRequests = new Map();
 
+// Dashboard cache (emails + events from Gmail/Calendar MCP, fetched via Claude)
+const DASHBOARD_TTL_MS = 10 * 60 * 1000; // 10 min
+const DASHBOARD_TIMEOUT_MS = 90_000;
+let dashboardMailCal = null; // { emails, events, updatedAt }
+let dashboardPending = false;
+
+function getArticleStats() {
+  const dir = path.join(WIKI_TARGET, "clanky");
+  if (!fs.existsSync(dir)) return { count: 0, list: [] };
+
+  try {
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith(".md") && f !== "index.md" && f !== "zdroje.md");
+    const unread = [];
+    for (const file of files) {
+      const full = path.join(dir, file);
+      let head;
+      try { head = fs.readFileSync(full, "utf8").slice(0, 2000); } catch { continue; }
+      if (!/^status:\s*chci-precist\b/mi.test(head)) continue;
+      const titleMatch = head.match(/^#\s+(.+)$/m) || head.match(/^title:\s*["']?(.+?)["']?\s*$/m);
+      unread.push({
+        title: titleMatch ? titleMatch[1].trim() : file.replace(/\.md$/, "").replace(/-/g, " "),
+        file: `clanky/${file}`,
+      });
+    }
+    return { count: unread.length, list: unread };
+  } catch (err) {
+    process.stderr.write(`[bridge] getArticleStats error: ${err.message}\n`);
+    return { count: 0, list: [], error: err.message };
+  }
+}
+
+async function refreshDashboardGmailCal() {
+  if (dashboardPending) return;
+  dashboardPending = true;
+  process.stderr.write(`[bridge] Dashboard: fetching Gmail + Calendar via Claude...\n`);
+
+  const prompt =
+    `Potřebuji JSON souhrn pro Pekáček dashboard.\n\n` +
+    `1) Přes mcp__claude_ai_Gmail__search_threads najdi nepřečtené emaily (query: "is:unread -category:promotions -category:social", maxResults 10).\n` +
+    `2) Přes mcp__claude_ai_Google_Calendar__list_events stáhni události z hlavního Google Calendáře pro následujících 14 dní od dneška.\n\n` +
+    `Odpověz POUZE validním JSON, bez markdown fence, bez textu okolo. Přesný tvar:\n` +
+    `{\n` +
+    `  "emails": [ { "from": "...", "subject": "...", "date": "YYYY-MM-DD" } ],\n` +
+    `  "events": [ { "title": "...", "date": "YYYY-MM-DD", "time": "HH:MM nebo null", "daysUntil": 0 } ]\n` +
+    `}\n\n` +
+    `"daysUntil" = 0 znamená dnes, 1 = zítra atd. Events seřaď chronologicky. "time" dej null pro celodenní události. Pokud nic, vrať prázdné array.`;
+
+  const args = [
+    "-p", prompt,
+    "--allowedTools", "mcp__claude_ai_Gmail__search_threads mcp__claude_ai_Google_Calendar__list_events",
+    "--output-format", "text",
+  ];
+
+  try {
+    const result = await new Promise((resolve, reject) => {
+      const proc = spawn(CLAUDE_BIN, args, {
+        cwd: WORKING_DIR,
+        env: { ...process.env },
+        timeout: DASHBOARD_TIMEOUT_MS,
+      });
+      let stdout = "", stderr = "";
+      proc.stdout.on("data", (c) => (stdout += c));
+      proc.stderr.on("data", (c) => (stderr += c));
+      proc.on("close", (code) => code === 0 ? resolve(stdout) : reject(new Error(stderr.trim() || `claude exit ${code}`)));
+      proc.on("error", reject);
+    });
+
+    const s = result.indexOf("{");
+    const e = result.lastIndexOf("}");
+    if (s < 0 || e <= s) throw new Error("Žádný JSON v odpovědi");
+    const parsed = JSON.parse(result.slice(s, e + 1));
+
+    dashboardMailCal = {
+      emails: Array.isArray(parsed.emails) ? parsed.emails : [],
+      events: Array.isArray(parsed.events) ? parsed.events : [],
+      updatedAt: Date.now(),
+    };
+    process.stderr.write(`[bridge] Dashboard: ${dashboardMailCal.emails.length} emails, ${dashboardMailCal.events.length} events\n`);
+  } catch (err) {
+    process.stderr.write(`[bridge] Dashboard refresh error: ${err.message.slice(0, 200)}\n`);
+  } finally {
+    dashboardPending = false;
+  }
+}
+
 function runClaude(prompt, sessionId, isRetry = false, timeoutMs = 120_000) {
   return new Promise((resolve, reject) => {
     const args = ["-p", prompt, "--output-format", "text"];
@@ -87,6 +172,38 @@ const server = http.createServer(async (req, res) => {
       cachedArticles: articleCache.size,
       port: PORT,
     }));
+  }
+
+  // Dashboard — returns articles (instant, filesystem) + cached emails/events (refreshed via Claude+MCP every 10 min)
+  if (req.method === "GET" && req.url === "/dashboard") {
+    const articles = getArticleStats();
+    const mc = dashboardMailCal;
+    const isFresh = mc && (Date.now() - mc.updatedAt) < DASHBOARD_TTL_MS;
+
+    // Trigger background refresh if stale/missing and not already running
+    if (!isFresh && !dashboardPending) {
+      refreshDashboardGmailCal();
+    }
+
+    const next = mc?.events?.[0] || null;
+    res.writeHead(200, { "Content-Type": "application/json" });
+    return res.end(JSON.stringify({
+      articles,
+      emails: mc ? { count: mc.emails.length, list: mc.emails } : null,
+      events: mc ? { count: mc.events.length, list: mc.events, next } : null,
+      pending: !isFresh,
+      updatedAt: mc?.updatedAt || null,
+    }));
+  }
+
+  // Force refresh dashboard (user clicked ↻)
+  if (req.method === "POST" && req.url === "/dashboard/refresh") {
+    if (!dashboardPending) {
+      dashboardMailCal = null; // invalidate cache so GET triggers refresh
+      refreshDashboardGmailCal();
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    return res.end(JSON.stringify({ ok: true, pending: dashboardPending }));
   }
 
   // Forget cached article (on reset)
@@ -379,7 +496,7 @@ checkEnvironment();
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`
   ╔══════════════════════════════════════╗
-  ║   Pekáček Bridge v2.4.0             ║
+  ║   Pekáček Bridge v2.7.0             ║
   ║   http://localhost:${PORT}/             ║
   ║                                      ║
   ║   ( o_o) ☕  Čekám na extension...   ║

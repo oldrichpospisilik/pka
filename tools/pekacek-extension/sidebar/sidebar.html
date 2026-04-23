@@ -14,6 +14,52 @@
    / \</div>
   </div>
 
+  <!-- Dashboard chip (📰 · 📬 · 📅) -->
+  <div id="dashboard">
+    <button id="dashboard-chip" title="Dashboard — klik pro detail">
+      <span class="dash-part" title="Nepřečtené články (wiki/clanky/)">
+        <span class="dash-icon">&#x1F4F0;</span>
+        <span id="dash-n-articles" class="dash-num">—</span>
+      </span>
+      <span class="dash-part" title="Nepřečtené emaily (Gmail)">
+        <span class="dash-icon">&#x1F4EC;</span>
+        <span id="dash-n-emails" class="dash-num">—</span>
+      </span>
+      <span class="dash-part" title="Nejbližší událost (Google Calendar)">
+        <span class="dash-icon">&#x1F4C5;</span>
+        <span id="dash-next-event" class="dash-num">—</span>
+      </span>
+      <span class="dash-caret">&#x25BE;</span>
+    </button>
+    <div id="dashboard-detail" class="dash-detail hidden">
+      <div class="dash-section">
+        <div class="dash-section-head">
+          <span>&#x1F4F0; Články k přečtení</span>
+          <span id="dash-head-articles" class="dash-count"></span>
+        </div>
+        <div id="dash-articles-list" class="dash-list dash-empty">—</div>
+      </div>
+      <div class="dash-section">
+        <div class="dash-section-head">
+          <span>&#x1F4EC; Nepřečtené emaily</span>
+          <span id="dash-head-emails" class="dash-count"></span>
+        </div>
+        <div id="dash-emails-list" class="dash-list dash-empty">—</div>
+      </div>
+      <div class="dash-section">
+        <div class="dash-section-head">
+          <span>&#x1F4C5; Nadcházející události</span>
+          <span id="dash-head-events" class="dash-count"></span>
+        </div>
+        <div id="dash-events-list" class="dash-list dash-empty">—</div>
+      </div>
+      <div class="dash-footer">
+        <span id="dash-updated" class="dash-updated">—</span>
+        <button id="dash-refresh" title="Obnovit emaily a kalendář (spustí Claude+MCP fetch)">&#x21BB; Obnovit</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Status bar -->
   <div id="status-bar">
     <span id="status-text">Připraveny</span>
@@ -23,17 +69,17 @@
 
   <!-- Quick actions -->
   <div id="actions">
-    <button class="action-btn" data-action="summarize" title="Souhrn stránky">
+    <button class="action-btn" data-action="summarize" data-shortcut="1" title="Souhrn stránky (Alt+1)">
       <span class="btn-icon">&#x1F4CB;</span> Souhrn
     </button>
-    <button class="action-btn" data-action="counter" title="Protimyšlenky">
+    <button class="action-btn" data-action="counter" data-shortcut="2" title="Protimyšlenky (Alt+2)">
       <span class="btn-icon">&#x1F914;</span> Proti
     </button>
-    <button class="action-btn" data-action="experiment" title="Experimenty k vyzkoušení">
+    <button class="action-btn" data-action="experiment" data-shortcut="3" title="Experimenty k vyzkoušení (Alt+3)">
       <span class="btn-icon">&#x1F9EA;</span> Zkus
     </button>
     <div class="action-dropdown">
-      <button class="action-btn dropdown-toggle" data-dropdown="explain" title="Vysvětli...">
+      <button class="action-btn dropdown-toggle" data-dropdown="explain" data-shortcut="4" title="Vysvětli... (Alt+4)">
         <span class="btn-icon">&#x1F393;</span> Vysvětli <span class="caret">▾</span>
       </button>
       <div class="dropdown-menu" id="dropdown-explain">
@@ -55,7 +101,7 @@
       </div>
     </div>
     <div class="action-dropdown dropdown-right">
-      <button class="action-btn action-save dropdown-toggle" data-dropdown="save" title="Uložit...">
+      <button class="action-btn action-save dropdown-toggle" data-dropdown="save" data-shortcut="5" title="Uložit... (Alt+5)">
         <span class="btn-icon">&#x1F4BE;</span> Uložit <span class="caret">▾</span>
       </button>
       <div class="dropdown-menu" id="dropdown-save">
@@ -77,55 +123,117 @@
   <!-- Input -->
   <div id="input-area">
     <div id="quick-dropdown">
-      <button id="quick-btn" title="Rychlé akce">&#x26A1;</button>
+      <button id="quick-btn" title="Rychlé akce (Alt+Q)">&#x26A1;</button>
       <div id="quick-menu" class="dropdown-menu dropdown-up">
-        <div class="dropdown-header">Filmy — co mi pustíš?</div>
-        <div class="chip-group chip-multi" id="film-moods">
-          <button class="chip" data-mood="oddychove" title="Chill, pohodové, nic těžkého">&#x1F60C; oddych</button>
-          <button class="chip" data-mood="akcni" title="Akční, adrenalin">&#x1F525; akce</button>
-          <button class="chip" data-mood="napinave" title="Chci se bát — thrillery, horor, napětí">&#x1F631; bát se</button>
-          <button class="chip" data-mood="hlubsi" title="Přemýšlivé, náročné drama">&#x1F9E0; hlubší</button>
-          <button class="chip" data-mood="humor" title="Komedie, sranda">&#x1F602; humor</button>
-          <button class="chip" data-mood="romanticke" title="Romantika">&#x1F495; roman</button>
-          <button class="chip" data-mood="feelgood" title="Feel-good, pohlazení po duši">&#x2600;&#xFE0F; feel-good</button>
-          <button class="chip" data-mood="temne" title="Temné, mrazivé atmosféry">&#x1F311; temné</button>
-          <button class="chip" data-mood="vizualni" title="Vizuálně pěkné, kamera, design">&#x1F3A8; vizuální</button>
-        </div>
-        <div class="chip-group chip-single" id="film-length" title="Délka filmu">
-          <button class="chip" data-length="short">&lt;90</button>
-          <button class="chip" data-length="standard">90–120</button>
-          <button class="chip" data-length="long">&gt;120</button>
-          <button class="chip active" data-length="any">libovolná</button>
-        </div>
-        <div class="chip-group chip-single" id="film-source" title="Odkud hledat">
-          <button class="chip active" data-source="watchlist" title="Jen z mého ČSFD watchlistu">&#x1F4CB; watchlist</button>
-          <button class="chip" data-source="csfd" title="Z celé ČSFD databáze (i filmy které nemám ve watchlistu)">&#x1F310; celé ČSFD</button>
-        </div>
-        <button class="dropdown-item dropdown-action" data-quick="film-custom">
-          <span class="btn-icon">&#x1F3AC;</span> Doporuč film (podle výběru)
-        </button>
+        <details class="accordion" name="pekacek-sections" data-section="film" open>
+          <summary>&#x1F3AC; Filmy — co mi pustíš?</summary>
+          <div class="chip-group chip-multi" id="film-moods">
+            <button class="chip" data-mood="oddychove" title="Chill, pohodové, nic těžkého">&#x1F60C; oddych</button>
+            <button class="chip" data-mood="akcni" title="Akční, adrenalin">&#x1F525; akce</button>
+            <button class="chip" data-mood="napinave" title="Chci se bát — thrillery, horor, napětí">&#x1F631; bát se</button>
+            <button class="chip" data-mood="hlubsi" title="Přemýšlivé, náročné drama">&#x1F9E0; hlubší</button>
+            <button class="chip" data-mood="humor" title="Komedie, sranda">&#x1F602; humor</button>
+            <button class="chip" data-mood="romanticke" title="Romantika">&#x1F495; roman</button>
+            <button class="chip" data-mood="feelgood" title="Feel-good, pohlazení po duši">&#x2600;&#xFE0F; feel-good</button>
+            <button class="chip" data-mood="temne" title="Temné, mrazivé atmosféry">&#x1F311; temné</button>
+            <button class="chip" data-mood="vizualni" title="Vizuálně pěkné, kamera, design">&#x1F3A8; vizuální</button>
+          </div>
+          <div class="chip-group chip-single" id="film-length" title="Délka filmu">
+            <button class="chip" data-length="short">&lt;90</button>
+            <button class="chip" data-length="standard">90–120</button>
+            <button class="chip" data-length="long">&gt;120</button>
+            <button class="chip active" data-length="any">libovolná</button>
+          </div>
+          <div class="chip-group chip-single" id="film-source" title="Odkud hledat">
+            <button class="chip active" data-source="watchlist" title="Jen z mého ČSFD watchlistu">&#x1F4CB; watchlist</button>
+            <button class="chip" data-source="csfd" title="Z celé ČSFD databáze (i filmy které nemám ve watchlistu)">&#x1F310; celé ČSFD</button>
+          </div>
+          <button class="dropdown-item dropdown-action" data-quick="film-custom">
+            <span class="btn-icon">&#x1F3AC;</span> Doporuč film (podle výběru)
+          </button>
+        </details>
 
-        <div class="dropdown-header">Recepty (mám chuť na...)</div>
-        <button class="dropdown-item" data-quick="food-fast">
-          <span class="btn-icon">&#x26A1;</span> Rychlovku
-        </button>
-        <button class="dropdown-item" data-quick="food-comfort">
-          <span class="btn-icon">&#x1F35C;</span> Comfort food
-        </button>
-        <button class="dropdown-item" data-quick="food-healthy">
-          <span class="btn-icon">&#x1F957;</span> Něco zdravého
-        </button>
+        <details class="accordion" name="pekacek-sections" data-section="recept">
+          <summary>&#x1F373; Recepty — mám chuť na...</summary>
+          <div class="chip-group chip-multi" id="recept-type" title="Typ jídla">
+            <button class="chip" data-type="snidane">&#x2600;&#xFE0F; snídaně</button>
+            <button class="chip" data-type="obed">&#x1F37D;&#xFE0F; oběd</button>
+            <button class="chip" data-type="vecere">&#x1F319; večeře</button>
+            <button class="chip" data-type="dezert">&#x1F370; dezert</button>
+            <button class="chip" data-type="polevka">&#x1F372; polévka</button>
+            <button class="chip" data-type="svacina">&#x1F96A; svačina</button>
+          </div>
+          <div class="chip-group chip-multi" id="recept-mood" title="Nálada">
+            <button class="chip" data-mood="rychlovka">&#x26A1; rychlovka</button>
+            <button class="chip" data-mood="comfort">&#x1F35C; comfort</button>
+            <button class="chip" data-mood="zdrave">&#x1F957; zdravé</button>
+            <button class="chip" data-mood="party">&#x1F389; party</button>
+            <button class="chip" data-mood="romanticke">&#x1F495; roman</button>
+            <button class="chip" data-mood="letni">&#x2600;&#xFE0F; letní</button>
+            <button class="chip" data-mood="podzimni">&#x1F342; podzim</button>
+          </div>
+          <div class="chip-group chip-single" id="recept-time" title="Čas přípravy">
+            <button class="chip" data-time="short">&lt;20 min</button>
+            <button class="chip" data-time="medium">20–45</button>
+            <button class="chip" data-time="long">&gt;45</button>
+            <button class="chip active" data-time="any">libovolný</button>
+          </div>
+          <div class="chip-group chip-single" id="recept-diet" title="Dieta">
+            <button class="chip active" data-diet="any">jakákoliv</button>
+            <button class="chip" data-diet="vegetarian">vegetariánské</button>
+            <button class="chip" data-diet="vegan">veganské</button>
+            <button class="chip" data-diet="glutenfree">bezlepkové</button>
+          </div>
+          <button class="dropdown-item dropdown-action" data-quick="recept-custom">
+            <span class="btn-icon">&#x1F373;</span> Doporuč recept (podle výběru)
+          </button>
+        </details>
 
-        <div class="dropdown-header">Z wiki</div>
-        <button class="dropdown-item" data-quick="lab">
-          <span class="btn-icon">&#x1F9EA;</span> Co dneska z labu?
-        </button>
-        <button class="dropdown-item" data-quick="articles">
-          <span class="btn-icon">&#x1F4F0;</span> Co dnes číst?
-        </button>
-        <button class="dropdown-item" data-quick="today">
-          <span class="btn-icon">&#x1F4C5;</span> Co mám dneska?
-        </button>
+        <details class="accordion" name="pekacek-sections" data-section="knihy">
+          <summary>&#x1F4D6; Knihy — co si pustit / přečíst?</summary>
+          <div class="chip-group chip-multi" id="book-format" title="Formát">
+            <button class="chip" data-format="kniha">&#x1F4D5; papír</button>
+            <button class="chip" data-format="ekniha">&#x1F4F1; ekniha</button>
+            <button class="chip" data-format="audiokniha">&#x1F3A7; audio</button>
+          </div>
+          <div class="chip-group chip-multi" id="book-mood" title="Nálada">
+            <button class="chip" data-mood="napinave">&#x1F631; napínavé</button>
+            <button class="chip" data-mood="oddychove">&#x1F60C; oddych</button>
+            <button class="chip" data-mood="temne">&#x1F311; temné</button>
+            <button class="chip" data-mood="humor">&#x1F602; humor</button>
+            <button class="chip" data-mood="hlubsi">&#x1F9E0; hlubší</button>
+            <button class="chip" data-mood="romantika">&#x1F495; roman</button>
+          </div>
+          <div class="chip-group chip-single" id="book-length" title="Délka">
+            <button class="chip" data-length="short">krátká</button>
+            <button class="chip" data-length="standard">standard</button>
+            <button class="chip" data-length="long">delší</button>
+            <button class="chip active" data-length="any">libovolná</button>
+          </div>
+          <button class="dropdown-item dropdown-action" data-quick="book-custom">
+            <span class="btn-icon">&#x1F4D6;</span> Doporuč knihu (podle výběru)
+          </button>
+        </details>
+
+        <details class="accordion" name="pekacek-sections" data-section="divadlo">
+          <summary>&#x1F3AD; Divadlo</summary>
+          <button class="dropdown-item" data-quick="divadlo">
+            <span class="btn-icon">&#x1F3AD;</span> Co v divadle?
+          </button>
+        </details>
+
+        <details class="accordion" name="pekacek-sections" data-section="wiki">
+          <summary>&#x1F4DD; Z wiki</summary>
+          <button class="dropdown-item" data-quick="lab">
+            <span class="btn-icon">&#x1F9EA;</span> Co dneska z labu?
+          </button>
+          <button class="dropdown-item" data-quick="articles">
+            <span class="btn-icon">&#x1F4F0;</span> Co dnes číst?
+          </button>
+          <button class="dropdown-item" data-quick="today">
+            <span class="btn-icon">&#x1F4C5;</span> Co mám dneska?
+          </button>
+        </details>
       </div>
     </div>
     <textarea id="user-input" placeholder="Zeptej se Pekáčka..." rows="2"></textarea>

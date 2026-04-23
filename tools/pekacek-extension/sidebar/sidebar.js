@@ -19,6 +19,9 @@ const FACES = {
   surprised:  "(°ロ°) !",
 };
 
+// --- Bridge ---
+const BRIDGE_URL = "http://localhost:3888";
+
 // --- State ---
 let currentPageContent = null;
 let articleRead = false;   // true after Pekáček read the article into session
@@ -36,6 +39,7 @@ const sendBtn = document.getElementById("send-btn");
 const stopBtn = document.getElementById("stop-btn");
 
 // --- Init ---
+loadDashboard();
 checkBridgeStatus();
 setFace("wave", "animate-wave");
 setTimeout(() => {
@@ -403,19 +407,98 @@ function buildFilmPrompt() {
   };
 }
 
+// --- Recept picker ---
+const RECEPT_TYPE_DESC = {
+  snidane: "snídaně", obed: "oběd", vecere: "večeře",
+  dezert: "dezert", polevka: "polévka", svacina: "svačina",
+};
+const RECEPT_MOOD_DESC = {
+  rychlovka: "rychlovka", comfort: "comfort food", zdrave: "zdravé / lehké",
+  party: "párty", romanticke: "romantické", letni: "letní / svěží", podzimni: "podzimní / zahřívací",
+};
+const RECEPT_TIME_DESC = {
+  short: "do 20 min", medium: "20–45 min", long: "přes 45 min", any: "libovolný",
+};
+const RECEPT_DIET_DESC = {
+  vegetarian: "vegetariánské", vegan: "veganské", glutenfree: "bezlepkové", any: "bez omezení",
+};
+
+function buildReceptPrompt() {
+  const types = [...document.querySelectorAll("#recept-type .chip.active")].map((c) => c.dataset.type);
+  const moods = [...document.querySelectorAll("#recept-mood .chip.active")].map((c) => c.dataset.mood);
+  const time = document.querySelector("#recept-time .chip.active")?.dataset.time || "any";
+  const diet = document.querySelector("#recept-diet .chip.active")?.dataset.diet || "any";
+
+  const typeStr = types.length ? types.map((t) => RECEPT_TYPE_DESC[t]).join(" / ") : "libovolný typ";
+  const moodStr = moods.length ? moods.map((m) => RECEPT_MOOD_DESC[m]).join("; ") : "bez konkrétní nálady";
+  const timeNote = time === "any" ? "" : ` Čas přípravy: ${RECEPT_TIME_DESC[time]}.`;
+  const dietNote = diet === "any" ? "" : ` Dieta: ${RECEPT_DIET_DESC[diet]}.`;
+
+  const labelParts = [];
+  if (types.length) labelParts.push(types.map((t) => RECEPT_TYPE_DESC[t]).join(" + "));
+  if (moods.length) labelParts.push(moods.map((m) => RECEPT_MOOD_DESC[m]).join(" + "));
+  if (time !== "any") labelParts.push(RECEPT_TIME_DESC[time]);
+  if (diet !== "any") labelParts.push(RECEPT_DIET_DESC[diet]);
+  const labelSuffix = labelParts.length ? ` (${labelParts.join(" · ")})` : "";
+
+  return {
+    label: `Doporuč recept${labelSuffix}`,
+    prompt: `Mám chuť na něco z receptů. Preference — typ jídla: ${typeStr}; nálada: ${moodStr}.${timeNote}${dietNote}\n\n` +
+      `Projdi \`wiki/recepty/\` pomocí \`grep\` na frontmatter řádky (**Typ jídla**:, **Nálada**:, **Čas**:, **Dieta**:). ` +
+      `Vyber 2–3 recepty které nejlépe odpovídají. U každého 1 řádek proč + čas + status. ` +
+      `Preferuj \`oblíbené\` a \`vyzkoušeno\` před \`chci-vyzkoušet\`. Pokud nic nesedí přesně, řekni to a navrhni nejbližší alternativu.`,
+  };
+}
+
+// --- Book picker ---
+const BOOK_FORMAT_DESC = {
+  kniha: "papírová kniha", ekniha: "ekniha", audiokniha: "audiokniha",
+};
+const BOOK_MOOD_DESC = {
+  napinave: "napínavé / thriller",
+  oddychove: "oddychové / chill",
+  temne: "temné / mrazivé",
+  humor: "humor / satira",
+  hlubsi: "hlubší / přemýšlivé",
+  romantika: "romantické",
+};
+const BOOK_LENGTH_DESC = {
+  short: "krátká (do ~250 stran / do ~6 h audio)",
+  standard: "standardní délka",
+  long: "delší (přes ~500 stran / přes ~15 h audio)",
+  any: "libovolná délka",
+};
+
+function buildBookPrompt() {
+  const formats = [...document.querySelectorAll("#book-format .chip.active")].map((c) => c.dataset.format);
+  const moods = [...document.querySelectorAll("#book-mood .chip.active")].map((c) => c.dataset.mood);
+  const length = document.querySelector("#book-length .chip.active")?.dataset.length || "any";
+
+  const formatStr = formats.length ? formats.map((f) => BOOK_FORMAT_DESC[f]).join(" / ") : "libovolný formát";
+  const moodStr = moods.length ? moods.map((m) => BOOK_MOOD_DESC[m]).join("; ") : "bez konkrétní nálady";
+  const lengthNote = length === "any" ? "" : ` Délka: ${BOOK_LENGTH_DESC[length]}.`;
+
+  const labelParts = [];
+  if (formats.length) labelParts.push(formats.join(" + "));
+  if (moods.length) labelParts.push(moods.join(" + "));
+  if (length !== "any") labelParts.push(BOOK_LENGTH_DESC[length].split(" ")[0]);
+  const labelSuffix = labelParts.length ? ` (${labelParts.join(" · ")})` : "";
+
+  return {
+    label: `Doporuč knihu${labelSuffix}`,
+    prompt: `Doporuč mi knihu z \`wiki/kultura/knihy/\`. Preference — formát: ${formatStr}; nálada: ${moodStr}.${lengthNote}\n\n` +
+      `Projdi stránky v \`wiki/kultura/knihy/\`, filtruj podle frontmatter (**Typ**:, **Nálada**:, **Délka**:, **Status**:). ` +
+      `Vyber 2–3 tituly které nejlépe sedí — u každého řádek proč + autor + formát + délka. ` +
+      `Preferuj status \`chci-přečíst\` / \`chci-poslechnout\` / rozečtené před již přečtenými. ` +
+      `Pokud je výběr prázdný nebo málo položek, řekni to upřímně.`,
+  };
+}
+
 // --- Quick action prompts ---
 const QUICK_ACTIONS = {
-  "food-fast": {
-    label: "Mám chuť na rychlovku",
-    prompt: "Mám chuť na něco rychlého (do 20–30 min přípravy). Co mi nabízí `wiki/recepty/`? Doporuč 2–3 pasující podle tagů (`Čas`, `Nálada: rychlovka`), preferuj `oblíbené` a `vyzkoušeno` před `chci-vyzkoušet`.",
-  },
-  "food-comfort": {
-    label: "Mám chuť na comfort food",
-    prompt: "Mám chuť na comfort food. Co mi nabízí `wiki/recepty/`? Doporuč 2–3 pasující podle `Nálada: comfort food`, preferuj `oblíbené` a `vyzkoušeno`.",
-  },
-  "food-healthy": {
-    label: "Mám chuť na něco zdravého",
-    prompt: "Mám chuť na něco zdravého / lehkého. Co mi nabízí `wiki/recepty/`? Doporuč 2–3 pasující (vegetariánské, saláty, `Nálada: zdravé`), preferuj `oblíbené` a `vyzkoušeno`.",
+  "divadlo": {
+    label: "Co v divadle?",
+    prompt: "Co mám ve `wiki/kultura/divadlo/`? Vypiš představení se statusem `chci-vidět` nebo `mám-lístek` — krátký seznam (název + divadlo + žánr + termín pokud je). Pokud je sekce prázdná, napiš to.",
   },
   "lab": {
     label: "Co dneska z labu?",
@@ -430,6 +513,172 @@ const QUICK_ACTIONS = {
     prompt: "Co mám dnes za události v kalendáři a nepřečtené důležité emaily? Krátký souhrn toho co stojí za pozornost — bez blabolu, jen podstata.",
   },
 };
+
+// --- Dashboard (📰 · 📬 · 📅) ---
+const DASHBOARD_POLL_MS = 3000;
+let dashboardPollTimer = null;
+
+async function loadDashboard() {
+  try {
+    const res = await fetch(`${BRIDGE_URL}/dashboard`);
+    if (!res.ok) return;
+    const data = await res.json();
+    renderDashboard(data);
+
+    if (dashboardPollTimer) { clearTimeout(dashboardPollTimer); dashboardPollTimer = null; }
+    if (data.pending) {
+      dashboardPollTimer = setTimeout(loadDashboard, DASHBOARD_POLL_MS);
+    }
+  } catch {
+    // Bridge offline — chip zůstane s "—"
+  }
+}
+
+function eventBadge(daysUntil) {
+  if (daysUntil === 0) return "dnes";
+  if (daysUntil === 1) return "zítra";
+  if (daysUntil <= 14) return `za ${daysUntil}d`;
+  return "—";
+}
+
+function renderDashboard(data) {
+  document.getElementById("dash-n-articles").textContent = data.articles?.count ?? "—";
+  document.getElementById("dash-n-emails").textContent =
+    data.emails ? data.emails.count : (data.pending ? "…" : "—");
+
+  const next = data.events?.next;
+  let nextLabel;
+  if (next) nextLabel = eventBadge(next.daysUntil);
+  else if (data.pending && !data.events) nextLabel = "…";
+  else nextLabel = "—";
+  document.getElementById("dash-next-event").textContent = nextLabel;
+
+  // Section heads
+  document.getElementById("dash-head-articles").textContent = data.articles ? `(${data.articles.count})` : "";
+  document.getElementById("dash-head-emails").textContent = data.emails ? `(${data.emails.count})` : "";
+  document.getElementById("dash-head-events").textContent = data.events ? `(${data.events.count})` : "";
+
+  // Articles — clickable (trigger read)
+  renderDashSection("articles", data.articles, data.pending, (a) => {
+    const btn = document.createElement("button");
+    btn.className = "dash-item";
+    btn.textContent = a.title;
+    btn.title = a.file;
+    btn.addEventListener("click", () => openArticleFromDashboard(a));
+    return btn;
+  }, "— žádné nepřečtené —");
+
+  // Emails — read-only rows
+  renderDashSection("emails", data.emails, data.pending, (e) => {
+    const row = document.createElement("div");
+    row.className = "dash-item dash-readonly";
+    const from = dashTruncate(e.from || "(neznámý)", 22);
+    const subj = dashTruncate(e.subject || "(bez předmětu)", 38);
+    row.innerHTML = `<strong>${escapeHtml(from)}</strong> — ${escapeHtml(subj)}`;
+    row.title = `${e.from || ""}: ${e.subject || ""}`;
+    return row;
+  }, "— inbox čistý —");
+
+  // Events — read-only with daysUntil prefix
+  renderDashSection("events", data.events, data.pending, (ev) => {
+    const row = document.createElement("div");
+    row.className = "dash-item dash-readonly";
+    const when = eventBadge(ev.daysUntil);
+    const timeStr = ev.time ? ` ${ev.time}` : "";
+    row.innerHTML = `<strong>${escapeHtml(when)}${escapeHtml(timeStr)}</strong>: ${escapeHtml(dashTruncate(ev.title || "", 38))}`;
+    row.title = `${ev.date || ""}${timeStr} — ${ev.title || ""}`;
+    return row;
+  }, "— nic v 14 dnech —");
+
+  // Last updated
+  const upd = document.getElementById("dash-updated");
+  if (data.updatedAt) {
+    const ageMin = Math.round((Date.now() - data.updatedAt) / 60000);
+    upd.textContent = ageMin < 1 ? "Aktualizováno < 1 min" : `Aktualizováno před ${ageMin} min`;
+  } else {
+    upd.textContent = data.pending ? "Načítám…" : "—";
+  }
+}
+
+function renderDashSection(key, section, pending, itemBuilder, emptyMsg) {
+  const el = document.getElementById(`dash-${key}-list`);
+  el.innerHTML = "";
+  if (!section) {
+    el.textContent = pending ? "Načítám…" : "—";
+    el.classList.add("dash-empty");
+    return;
+  }
+  const list = section.list || [];
+  if (list.length === 0) {
+    el.textContent = emptyMsg;
+    el.classList.add("dash-empty");
+    return;
+  }
+  el.classList.remove("dash-empty");
+  for (const item of list.slice(0, 8)) {
+    el.appendChild(itemBuilder(item));
+  }
+}
+
+function dashTruncate(str, len) {
+  return str.length > len ? str.slice(0, len) + "…" : str;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function openArticleFromDashboard(article) {
+  document.getElementById("dashboard-detail").classList.add("hidden");
+  document.getElementById("dashboard").classList.remove("open");
+  addMessage("user", `Koukni na ${article.title}`);
+  sendToBridge(
+    `Přečti prosím wiki stránku \`${article.file}\` a krátce shrň (hlavní myšlenky, co je zajímavé, 3–5 vět). ` +
+    `Neupravuj soubor — jen přečti a shrň. Na konci napiš jestli ji doporučuješ označit \`precteno\` (stojí za to), ` +
+    `\`zamitnuto\` (není to to co čekal), nebo nechat v \`chci-precist\`.`,
+    { action: "quick" }
+  );
+}
+
+// Chip click → toggle detail
+document.getElementById("dashboard-chip").addEventListener("click", () => {
+  const detail = document.getElementById("dashboard-detail");
+  const root = document.getElementById("dashboard");
+  detail.classList.toggle("hidden");
+  root.classList.toggle("open", !detail.classList.contains("hidden"));
+});
+
+// Refresh button — invalidates cache and re-polls
+document.getElementById("dash-refresh").addEventListener("click", async () => {
+  document.getElementById("dash-updated").textContent = "Načítám…";
+  try {
+    await fetch(`${BRIDGE_URL}/dashboard/refresh`, { method: "POST" });
+  } catch {}
+  loadDashboard();
+});
+
+// Re-poll on tab focus
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) loadDashboard();
+});
+
+// --- Accordion state persistence (pekacek-sections) ---
+const ACCORDION_KEY = "pekacek.accordion.open";
+(function initAccordion() {
+  const saved = localStorage.getItem(ACCORDION_KEY);
+  const sections = document.querySelectorAll("details.accordion");
+  if (saved) {
+    const target = document.querySelector(`details.accordion[data-section="${saved}"]`);
+    if (target) {
+      sections.forEach((d) => { d.open = (d === target); });
+    }
+  }
+  sections.forEach((d) => {
+    d.addEventListener("toggle", () => {
+      if (d.open) localStorage.setItem(ACCORDION_KEY, d.dataset.section);
+    });
+  });
+})();
 
 // --- Quick dropdown (⚡ u send buttonu) ---
 document.getElementById("quick-btn").addEventListener("click", (e) => {
@@ -464,10 +713,36 @@ document.getElementById("quick-menu").addEventListener("click", (e) => {
   closeAllDropdowns();
 
   const quickId = item.dataset.quick;
-  const qa = quickId === "film-custom" ? buildFilmPrompt() : QUICK_ACTIONS[quickId];
+  const builders = {
+    "film-custom": buildFilmPrompt,
+    "recept-custom": buildReceptPrompt,
+    "book-custom": buildBookPrompt,
+  };
+  const qa = builders[quickId] ? builders[quickId]() : QUICK_ACTIONS[quickId];
   if (!qa) return;
   addMessage("user", qa.label);
   sendToBridge(qa.prompt, { action: "quick" });
+});
+
+// --- Keyboard shortcuts (Alt+1..5 = top buttons, Alt+Q = quick menu) ---
+document.addEventListener("keydown", (e) => {
+  if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+
+  // Alt+Q — quick ⚡ menu
+  if (e.key === "q" || e.key === "Q") {
+    e.preventDefault();
+    document.getElementById("quick-btn").click();
+    return;
+  }
+
+  // Alt+1..5 — top action buttons
+  if (/^[1-5]$/.test(e.key)) {
+    const btn = document.querySelector(`#actions [data-shortcut="${e.key}"]`);
+    if (btn) {
+      e.preventDefault();
+      btn.click();
+    }
+  }
 });
 
 // --- Actions ---
@@ -630,7 +905,6 @@ function handleUserMessage() {
 }
 
 // --- Bridge communication (SSE streaming) ---
-const BRIDGE_URL = "http://localhost:3888";
 
 // Contextual thinking messages per action
 const THINKING_MESSAGES = {

@@ -5,6 +5,41 @@ Semver: `MAJOR.MINOR.PATCH`.
 - **MINOR** — nové feature, zpětně kompatibilní
 - **PATCH** — bugfixy, drobné úpravy
 
+## 2.7.0 — 2026-04-23
+
+### Nové
+- **Dashboard chip v horní liště.** Nad status barem nový řádek: `📰 {články} · 📬 {emaily} · 📅 {nejbližší událost}`. Klik rozbalí detail panel se třemi sekcemi:
+  - **📰 Články k přečtení** — seznam titulů z `wiki/clanky/` se statusem `chci-precist` (grep filesystemu v bridge, instant). Každá položka klikatelná → pošle prompt "přečti a shrň" s návrhem zda označit `precteno` / `zamitnuto`.
+  - **📬 Nepřečtené emaily** — Gmail MCP (`is:unread -category:promotions -category:social`), max 10. Read-only výpis *od — předmět*.
+  - **📅 Nadcházející události** — Google Calendar MCP, 14 dní dopředu. Prefix *dnes / zítra / za Nd*, plus čas u časovaných.
+  - Footer: "Aktualizováno před N min" + **↻ Obnovit** tlačítko (invaliduje cache a re-fetchne).
+- **Bridge endpointy:**
+  - `GET /dashboard` — vrací články instantně (filesystem grep) + cached emaily/události (TTL 10 min). Pokud je cache stará / prázdná, spustí background refresh a vrátí `pending: true`.
+  - `POST /dashboard/refresh` — invaliduje cache a spustí fetch. Klient poté polluje `GET /dashboard` každé 3s dokud není `pending: false`.
+  - Emaily + události fetchuje samostatným `claude -p` voláním s `--allowedTools mcp__claude_ai_Gmail__search_threads mcp__claude_ai_Google_Calendar__list_events` a JSON výstupem.
+- **Sidebar polluje dashboard** při otevření a při `visibilitychange` (návrat do záložky).
+
+## 2.6.0 — 2026-04-23
+
+### Nové
+- **Recept picker** — místo 3 statických tlačítek (rychlovka / comfort / zdravé) plný chip picker analogický k filmům. Čtyři řádky:
+  - **Typ jídla (multi)**: ☀️ snídaně · 🍽️ oběd · 🌙 večeře · 🍰 dezert · 🍲 polévka · 🥪 svačina.
+  - **Nálada (multi)**: ⚡ rychlovka · 🍜 comfort · 🥗 zdravé · 🎉 party · 💕 roman · ☀️ letní · 🍂 podzim.
+  - **Čas (single)**: &lt;20 · 20–45 · &gt;45 · libovolný.
+  - **Dieta (single)**: jakákoliv · vegetariánské · veganské · bezlepkové.
+  - Prompt radí Claudovi grepnout frontmatter v `wiki/recepty/` (**Typ jídla**:, **Nálada**:, **Čas**:, **Dieta**:) a preferovat `oblíbené` + `vyzkoušeno`.
+- **Knihy picker** — nová sekce "Knihy — co si pustit / přečíst?". Čerpá z `wiki/kultura/knihy/`:
+  - **Formát (multi)**: 📕 papír · 📱 ekniha · 🎧 audio.
+  - **Nálada (multi)**: 😱 napínavé · 😌 oddych · 🌑 temné · 😂 humor · 🧠 hlubší · 💕 roman.
+  - **Délka (single)**: krátká · standard · delší · libovolná.
+  - Prompt preferuje status `chci-přečíst` / `chci-poslechnout` před přečtenými.
+- **Divadlo** — jednoduchá položka "Co v divadle?" (vypíše stránky z `wiki/kultura/divadlo/` se statusem `chci-vidět` / `mám-lístek`).
+- **Accordion sekce v ⚡ menu.** Sekce (Filmy / Recepty / Knihy / Divadlo / Z wiki) jsou teď kolapsovatelné `<details name="pekacek-sections">` — max 1 otevřená naráz (browser-native exkluzivita). Caret ▸ se otáčí, aktivní sekce je zeleně podbarvená. Poslední otevřená sekce se pamatuje v `localStorage` (klíč `pekacek.accordion.open`), default = Filmy. Menu má také `max-height: 70vh` + scroll kdyby se jedna velká sekce nevešla.
+- **Klávesové zkratky** v sidebaru:
+  - **Alt+1** Souhrn · **Alt+2** Proti · **Alt+3** Zkus · **Alt+4** Vysvětli ▾ · **Alt+5** Uložit ▾.
+  - **Alt+Q** — toggle ⚡ quick menu.
+  - Tooltipy na tlačítkách teď zmiňují příslušnou zkratku.
+
 ## 2.5.0 — 2026-04-23
 
 ### Nové

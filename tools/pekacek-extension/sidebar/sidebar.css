@@ -214,6 +214,145 @@ body {
   border-bottom: 1px solid var(--text-muted);
 }
 
+/* --- Dashboard chip --- */
+
+#dashboard {
+  background: var(--bg-light);
+  border-bottom: 1px solid var(--text-muted);
+  font-family: var(--sans);
+}
+
+#dashboard-chip {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  padding: 6px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: background 0.1s;
+}
+#dashboard-chip:hover {
+  background: var(--bg-card);
+}
+.dash-part {
+  color: var(--text-dim);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.dash-icon {
+  font-size: 12px;
+}
+.dash-num {
+  color: var(--text);
+  font-weight: 600;
+  min-width: 1.5em;
+}
+.dash-caret {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 10px;
+  transition: transform 0.15s;
+}
+#dashboard.open .dash-caret {
+  transform: rotate(180deg);
+}
+
+.dash-detail {
+  padding: 6px 10px 8px;
+  background: var(--bg);
+  border-top: 1px solid var(--text-muted);
+}
+.dash-detail.hidden {
+  display: none;
+}
+
+.dash-section {
+  margin-bottom: 8px;
+}
+.dash-section:last-of-type {
+  margin-bottom: 6px;
+}
+.dash-section-head {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 3px 2px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.dash-count {
+  color: var(--text-muted);
+  font-weight: normal;
+}
+
+.dash-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 11px;
+}
+.dash-list.dash-empty {
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 3px 6px;
+}
+
+.dash-item {
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  text-align: left;
+  padding: 4px 6px;
+  color: var(--text);
+  font-size: 11px;
+  font-family: var(--sans);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash-item:hover:not(.dash-readonly):not(:disabled) {
+  background: var(--bg-card);
+  color: var(--green);
+}
+.dash-item.dash-readonly,
+.dash-item:disabled {
+  cursor: default;
+}
+
+.dash-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 4px;
+  margin-top: 4px;
+  border-top: 1px dashed var(--text-muted);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+#dash-refresh {
+  background: transparent;
+  border: 1px solid var(--text-muted);
+  border-radius: 4px;
+  color: var(--text-dim);
+  padding: 2px 8px;
+  font-size: 10px;
+  cursor: pointer;
+  font-family: var(--sans);
+}
+#dash-refresh:hover {
+  border-color: var(--green);
+  color: var(--green);
+}
+
 #page-indicator {
   max-width: 60%;
   overflow: hidden;
@@ -635,6 +774,51 @@ body {
 
 #quick-menu {
   min-width: 240px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+/* --- Accordion sections inside quick menu --- */
+
+.accordion {
+  border-top: 1px solid var(--text-muted);
+}
+.accordion:first-child {
+  border-top: none;
+}
+.accordion > summary {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 6px 8px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 0.1s, background 0.1s;
+}
+.accordion > summary::-webkit-details-marker {
+  display: none;
+}
+.accordion > summary::after {
+  content: "▸";
+  margin-left: auto;
+  font-size: 9px;
+  transition: transform 0.15s;
+  color: var(--text-muted);
+}
+.accordion[open] > summary::after {
+  transform: rotate(90deg);
+}
+.accordion > summary:hover {
+  color: var(--text);
+  background: var(--bg-card);
+}
+.accordion[open] > summary {
+  color: var(--green);
 }
 
 /* --- Chips (pro film mood picker v quick dropdown) --- */
