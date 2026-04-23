@@ -161,6 +161,7 @@ const server = http.createServer(async (req, res) => {
           "-p", prompt,
           "--permission-mode", "acceptEdits",
           "--add-dir", "/mnt/p/Wiki/Wiki",
+          "--allowedTools", "Bash(node csfd-rate.mjs *) Bash(node tools/*) Bash(grep *) Bash(rg *) Bash(ls *) Bash(find *)",
           "--output-format", "stream-json",
           "--verbose",
           "--include-partial-messages",
@@ -378,7 +379,7 @@ checkEnvironment();
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`
   ╔══════════════════════════════════════╗
-  ║   Pekáček Bridge v2.3.0             ║
+  ║   Pekáček Bridge v2.3.1             ║
   ║   http://localhost:${PORT}/             ║
   ║                                      ║
   ║   ( o_o) ☕  Čekám na extension...   ║

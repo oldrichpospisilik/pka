@@ -5,6 +5,14 @@ Semver: `MAJOR.MINOR.PATCH`.
 - **MINOR** — nové feature, zpětně kompatibilní
 - **PATCH** — bugfixy, drobné úpravy
 
+## 2.3.1 — 2026-04-23
+
+### Opravy
+- **Bash allowlist v bridge.** `--permission-mode acceptEdits` řeší jen Write/Edit — Bash příkazy v headless módu stále potřebují explicit allow. Doplněno `--allowedTools` s bezpečnými read-only příkazy potřebnými pro quick actions:
+  - `Bash(node csfd-rate.mjs *)` — watchlist, rate, atd.
+  - `Bash(node tools/*)` — ostatní skripty v `tools/`
+  - `Bash(grep *)`, `Bash(rg *)`, `Bash(ls *)`, `Bash(find *)` — wiki searches / file listing
+
 ## 2.3.0 — 2026-04-23
 
 ### Nové
