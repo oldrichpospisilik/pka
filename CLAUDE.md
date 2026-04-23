@@ -96,11 +96,10 @@ raw/                    ← surové zdroje, nikdy nemodifikovat
                            Claude sám určí kategorii při ingestu
 ```
 
-Existují **čtyři** raw zdroje — při ingestu kontroluj všechny:
-1. WSL:                   `~/wiki/raw/`              (ručně házíš při práci v Claude Code)
-2. pCloud:                `/mnt/p/Wiki/raw/`         (ručně z telefonu, prohlížeče)
-3. Obsidian Web Clipper:  `/mnt/p/Wiki/Wiki/_raw/`   (automaticky z browser extension)
-4. Chrome záložky:        `_raw` složka v Bookmarks   (záložky z prohlížeče)
+Existují **tři** raw zdroje — při ingestu kontroluj všechny:
+1. pCloud:                `/mnt/p/Wiki/raw/`         (ručně z telefonu, prohlížeče)
+2. Obsidian Web Clipper:  `/mnt/p/Wiki/Wiki/_raw/`   (automaticky z browser extension)
+3. Chrome záložky:        `_raw` složka v Bookmarks   (záložky z prohlížeče)
 
 **Workflow pro `_raw/`:** Během ingestu projdi i tuto složku. Po zpracování **přesuň všechny soubory odtud do `/mnt/p/Wiki/raw/`** (aby zůstaly jako trvalý zdroj vedle ostatních raw) a celou složku `_raw` následně **smaž** (`rmdir`) — Web Clipper si ji při příštím uložení vytvoří znova.
 
@@ -109,7 +108,7 @@ Existují **čtyři** raw zdroje — při ingestu kontroluj všechny:
 - **ČSFD odkaz** (`csfd.cz/film/`) → `node csfd-rate.mjs watchlist-add <url>`, po úspěchu smaž záložku.
 - **Článek / blog** (běžné URL) → `WebFetch` obsah, vytvoř stránku v `clanky/` (template s `status: chci-precist`), smaž záložku.
 - **YouTube video** (`youtube.com/watch`, `youtu.be/`) → `WebFetch` pro metadata (název, kanál), pak rozhodni:
-  - Film/seriál ke zhlédnutí → `csfd-rate.mjs watchlist-add` nebo wiki `kultura/filmy/`
+  - Film/seriál ke zhlédnutí → `csfd-rate.mjs watchlist-add` (ne wiki)
   - Vzdělávací obsah → wiki stránka v příslušné kategorii
   - Hudba / meme / zábava → přeskoč, označ `[skip]` v názvu záložky
   - Nejasné → zeptej se uživatele
@@ -154,7 +153,7 @@ wiki/                   ← zpracované stránky udržované Claudem
 - **technologie/** — AI nástroje, vývoj, architektura systémů, experimenty. Propojovat s `lab/` sekcí.
 - **gaming/** — hry, wishlist, doporučení, herní zážitky.
 - **kultura/** — **beletrie a zábava** (vše konzumované pro zábavu, ne pro učení):
-  - **filmy/** — watchlist filmů a seriálů, viděné tituly s hodnoceními. Napojeno na ČSFD přes MCP pro automatické doplňování metadat.
+  - **filmy/** — **minimální**. Primární zdroj je ČSFD: watchlist přes `csfd-rate.mjs watchlist`, hodnocení přes `mcp__csfd__get_user_ratings`. Wiki stránka se zakládá **jen výjimečně** (rozbor, zápisky nad rámec hodnocení), ne automaticky po zhlédnutí.
   - **knihy/** — beletrie ve všech formátech (papírové, ebook, audiokniha). Formát se rozlišuje metadatem `Typ:`, ne samostatnou složkou — stejná kniha v různých formátech = jedna stránka. Naučné knihy patří do `vzdelavani/`.
   - **divadlo/** — představení: chci-vidět i viděné.
 - **nakupy/** — věci ke koupi, ve dvou liniích:
@@ -222,34 +221,28 @@ Všechny podkategorie v `kultura/` používají Dataview plugin v Obsidianu pro 
 
 ### Filmy (`kultura/filmy/`)
 
+**Primární zdroj pro filmy je ČSFD, ne wiki.** Když uživatel řekne *"co mám na watchlistu"*, *"co jsem viděl"*, *"doporuč mi film"*, *"chci se na něco kouknout"* — **negrepuj wiki**, zavolej ČSFD nástroje:
+
+- Watchlist (Chci vidět) → `node csfd-rate.mjs watchlist` (nebo `--all` pro celý)
+- Viděné tituly + hodnocení → `mcp__csfd__get_user_ratings` (user: `"maxx"`)
+- Přidat na watchlist → `node csfd-rate.mjs watchlist-add <url|id> [pozn]`
+- Ohodnotit → `node csfd-rate.mjs rate <url|id> <1-5>`
+- Metadata (žánr, rok, ...) → `mcp__csfd__search` → `mcp__csfd__get_movie`
+
+Credentials pro Playwright v `~/pka/.env` (`CSFD_USERNAME`, `CSFD_PASSWORD`). Playwright login = přezdívka (`nick`), ne email.
+
+**Wiki stránku v `kultura/filmy/` zakládej jen na explicitní žádost** (rozbor, zápisky nad rámec hodnocení). Šablona pro ty výjimečné případy:
+
 ```markdown
 # Název filmu (rok)
 
 **Shrnutí**: Krátký popis.
 **Žánr**:
 **ČSFD hodnocení**:
-**Proč chci vidět**:
-**Nálada**: (akční / přemýšlivé / oddychové...)
-**Status**: chci-vidět / viděno
-**Moje hodnocení**: (po zhlédnutí)
-**Poznámky**: (po zhlédnutí)
+**Moje hodnocení**:
+**Poznámky**:
 **Zdroj doporučení**:
 ```
-
-**ČSFD integrace** — dva nástroje, každý na jiné věci:
-
-1. **MCP (`mcp__csfd__*`)** — read-only metadata: `search` (najdi film → ID), `get_movie` (detail filmu), `get_user_ratings` / `get_user_reviews` (hodnocení/recenze uživatele). Watchlist neumí.
-2. **Playwright tool (`~/wiki/csfd-rate.mjs`)** — přihlašuje se na ČSFD a provádí akce vyžadující login:
-   ```bash
-   node csfd-rate.mjs watchlist [--all]           # stáhne "Chci vidět" seznam
-   node csfd-rate.mjs watchlist-add <url|id> [pozn]  # přidá film do Chci vidět
-   node csfd-rate.mjs watchlist-remove <url|id>    # odebere z Chci vidět
-   node csfd-rate.mjs rate <url|id> <1-5>          # ohodnotí film hvězdičkami
-   node csfd-rate.mjs check <url|id>               # zkontroluje aktuální hodnocení
-   ```
-   Credentials v `~/wiki/.env` (`CSFD_USERNAME`, `CSFD_PASSWORD`).
-
-**Workflow film → wiki**: MCP `search` → `get_movie` pro metadata → vytvoř wiki stránku v `kultura/filmy/`. Pro watchlist / hodnocení použij `csfd-rate.mjs`.
 
 Plán viz [[lab/csfd-mcp-integrace]].
 
@@ -446,21 +439,20 @@ Priorita:
 
 ## Umístění wiki (pCloud)
 
-**Wiki primárně sídlí na pCloudu**, ne ve WSL. WSL obsahuje jen CLAUDE.md a symlink pro pohodlnou práci v Claude Code.
+**Wiki primárně sídlí na pCloudu**, ne ve WSL. WSL obsahuje jen CLAUDE.md, skripty a symlink pro pohodlnou práci v Claude Code.
 
 | Co | Kde |
 |---|---|
 | Obsah wiki (primární) | `/mnt/p/Wiki/Wiki/` (WSL) = `P:\Wiki\Wiki\` (Windows) |
 | Obsidian vault (`.obsidian/`) | `/mnt/p/Wiki/Wiki/.obsidian/` — tamtéž |
 | Raw zdroje (pCloud) | `/mnt/p/Wiki/raw/` — přidáváš z telefonu/prohlížeče |
-| Raw zdroje (WSL) | `~/wiki/raw/` — lokální; obě kontroluj při ingestu |
-| Claude Code workspace | `~/wiki/` — obsahuje `CLAUDE.md`, `raw/`, a **symlink** `wiki → /mnt/p/Wiki/Wiki` |
+| Claude Code workspace | `~/pka/` — obsahuje `CLAUDE.md`, skripty a **symlink** `wiki → /mnt/p/Wiki/Wiki` |
 
-Z pohledu Claude Code pracuješ s cestami `~/wiki/wiki/...`, reálně ale všechny zápisy jdou přímo na pCloud. Obsidian na Windows otevírá stejná data.
+Z pohledu Claude Code pracuješ s cestami `~/pka/wiki/...`, reálně ale všechny zápisy jdou přímo na pCloud. Obsidian na Windows otevírá stejná data.
 
 ### Předpoklad: pCloud musí běžet
 
-Disk `P:` je pCloud drive, který se ve Windows připojí až po spuštění pCloud aplikace. Pokud `/mnt/p/Wiki/` nejde otevřít (a tedy ani symlink `~/wiki/wiki` nefunguje):
+Disk `P:` je pCloud drive, který se ve Windows připojí až po spuštění pCloud aplikace. Pokud `/mnt/p/Wiki/` nejde otevřít (a tedy ani symlink `~/pka/wiki` nefunguje):
 
 1. Ověř, že v systray běží **pCloud** a disk `P:\` je dostupný ve Windows.
 2. Ve WSL namountuj disk:

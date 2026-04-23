@@ -1,9 +1,11 @@
 ---
 name: csfd
-description: Správa filmů a seriálů na ČSFD — vyhledávání, metadata, hodnocení, watchlist. Spouští uživatel zprávou jako "ohodnoť X", "přidej X na watchlist", "chci vidět X", "viděl jsem X", "dávám X hvězdiček", "co mám na watchlistu", "najdi film X na ČSFD".
+description: Správa filmů a seriálů na ČSFD — vyhledávání, metadata, hodnocení, watchlist, doporučování. Spouští uživatel zprávou jako "ohodnoť X", "přidej X na watchlist", "chci vidět X", "viděl jsem X", "dávám X hvězdiček", "co mám na watchlistu", "doporuč mi film", "chci se na něco kouknout", "najdi film X na ČSFD".
 ---
 
 # ČSFD Tool
+
+**Primární zdroj pro filmy je ČSFD, ne wiki.** Když se uživatel ptá na svůj watchlist, hodnocení, doporučení nebo historii zhlédnutí — **negrepuj `kultura/filmy/`**. Zavolej ČSFD nástroje a odpověz z jejich výstupu.
 
 Integrace s ČSFD.cz pro správu filmů/seriálů. Dva kanály:
 
@@ -14,7 +16,7 @@ Integrace s ČSFD.cz pro správu filmů/seriálů. Dva kanály:
 
 - Nick: **maxx**
 - Profil: https://www.csfd.cz/uzivatel/316-maxx/
-- Credentials: `~/wiki/.env` (CSFD_USERNAME, CSFD_PASSWORD)
+- Credentials: `~/pka/.env` (CSFD_USERNAME, CSFD_PASSWORD)
 
 ## MCP tooly
 
@@ -29,7 +31,7 @@ Integrace s ČSFD.cz pro správu filmů/seriálů. Dva kanály:
 
 **Pozor:** MCP tooly jsou deferred — před prvním použitím zavolej `ToolSearch` s `select:mcp__csfd__search,mcp__csfd__get_movie` atd.
 
-## Playwright skript (`~/wiki/csfd-rate.mjs`)
+## Playwright skript (`~/pka/csfd-rate.mjs`)
 
 ```bash
 # Hodnocení
@@ -45,34 +47,34 @@ node csfd-rate.mjs watchlist-remove <url-nebo-id>
 
 Přijímá ČSFD URL i číselné ID. Timeout na příkaz: **60 sekund** (login + navigace + akce).
 
-## Workflow: uživatel chce přidat film do wiki
+## Workflow: doporučení / "co si pustit" / "co mám na watchlistu"
+
+1. `node csfd-rate.mjs watchlist` (nebo `--all` pro celý) → stáhni Chci vidět
+2. Volitelně `mcp__csfd__get_user_ratings` (user `"maxx"`) → zohledni co uživatel už viděl / rád má
+3. Doporuč z watchlistu podle vyžádané nálady / žánru / délky. **Nehledej ve wiki** — wiki film stránky jsou výjimky, ne databáze.
+
+## Workflow: uživatel chce přidat na watchlist
 
 1. `mcp__csfd__search` → najdi film, získej ID
-2. `mcp__csfd__get_movie(id)` → stáhni metadata
-3. Vytvoř stránku v `wiki/kultura/filmy/` podle šablony v CLAUDE.md
-4. Zeptej se na subjektivní pole: *proč chci vidět*, *nálada*, *zdroj doporučení*
+2. `node csfd-rate.mjs watchlist-add <id> [poznamka]`
+3. **Wiki stránku nezakládej** (ledaže řekne explicitně).
 
 ## Workflow: uživatel chce ohodnotit film
 
 1. Pokud neznáš ČSFD ID: `mcp__csfd__search` → najdi film
 2. `node csfd-rate.mjs rate <id> <hvezdicky>` → zapíše na ČSFD
-3. Aktualizuj wiki stránku filmu (status → viděno, hodnocení, poznámky)
-
-## Workflow: uživatel chce přidat na watchlist
-
-1. `mcp__csfd__search` → najdi film
-2. `node csfd-rate.mjs watchlist-add <id> [poznamka]`
-3. Volitelně: vytvoř wiki stránku se status `chci-vidět`
+3. **Wiki stránku neaktualizuj** (ledaže existuje — pak status → viděno + hodnocení).
 
 ## Workflow: uživatel chce odebrat z watchlistu
 
 1. `node csfd-rate.mjs watchlist-remove <url-nebo-id>`
 
-## Workflow: sync hodnocení z ČSFD
+## Workflow: uživatel chce wiki stránku k filmu (výjimka)
 
-1. `mcp__csfd__get_user_ratings` s `user: "maxx"` → seznam hodnocených filmů
-2. Porovnej s wiki stránkami v `kultura/filmy/`
-3. Aktualizuj chybějící hodnocení
+Jen na explicitní žádost (*"napiš mi o tom poznámky"*, *"chci si o tom něco zapsat"*):
+
+1. `mcp__csfd__search` + `mcp__csfd__get_movie(id)` → metadata
+2. Vytvoř stránku v `wiki/kultura/filmy/` podle zkrácené šablony v CLAUDE.md
 
 ## Technické poznámky
 
@@ -80,4 +82,4 @@ Přijímá ČSFD URL i číselné ID. Timeout na příkaz: **60 sekund** (login 
 - Login přes přezdívku (pole `nick`), ne email.
 - Hvězdičky: `data-rating` 20/40/60/80/100 = 1–5★.
 - Watchlist-add automaticky zaškrtne "po ohodnocení vyřadit ze Chci vidět".
-- Dependencies: `playwright`, `dotenv` v `~/wiki/package.json`.
+- Dependencies: `playwright`, `dotenv` v `~/pka/package.json`.

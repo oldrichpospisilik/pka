@@ -18,9 +18,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-WIKI_DIR="$HOME/wiki"
+PKA_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PCCLOUD_MOUNT="/mnt/p"
-WIKI_SYMLINK="$WIKI_DIR/wiki"
+WIKI_SYMLINK="$PKA_DIR/wiki"
 WIKI_TARGET="$PCCLOUD_MOUNT/Wiki/Wiki"
 
 ok()   { echo -e "  ${GREEN}✓${NC} $1"; }
@@ -34,8 +34,8 @@ echo ""
 errors=0
 
 # --- 0. Git pull (sync z jiného stroje) ---
-cd "$WIKI_DIR"
-if [ -d "$WIKI_DIR/.git" ] && git remote get-url origin &>/dev/null; then
+cd "$PKA_DIR"
+if [ -d "$PKA_DIR/.git" ] && git remote get-url origin &>/dev/null; then
     if git pull --ff-only 2>/dev/null; then
         ok "Git pull (up to date)"
     else
@@ -79,7 +79,7 @@ elif [ ! -e "$WIKI_SYMLINK" ]; then
 fi
 
 # --- 3. .env ---
-if [ -f "$WIKI_DIR/.env" ]; then
+if [ -f "$PKA_DIR/.env" ]; then
     ok ".env existuje (ČSFD credentials)"
 else
     warn ".env chybí — ČSFD skripty nebudou fungovat (viz .env.example)"
@@ -94,7 +94,7 @@ else
 fi
 
 # --- 5. Dependencies ---
-if [ -d "$WIKI_DIR/node_modules/playwright" ]; then
+if [ -d "$PKA_DIR/node_modules/playwright" ]; then
     ok "Playwright nainstalovaný"
 else
     warn "Playwright chybí — spusť: npm install"
@@ -107,7 +107,7 @@ else
 fi
 
 # --- 6. MCP config ---
-if [ -f "$WIKI_DIR/.mcp.json" ]; then
+if [ -f "$PKA_DIR/.mcp.json" ]; then
     ok ".mcp.json existuje (ČSFD MCP)"
 else
     warn ".mcp.json chybí — ČSFD MCP nebude dostupný"
@@ -145,7 +145,7 @@ echo -e "${GREEN}Všechno OK.${NC}"
 echo ""
 
 # --- Start Pekáček bridge (for Chrome extension) ---
-BRIDGE_SCRIPT="$WIKI_DIR/tools/pekacek-extension/bridge.mjs"
+BRIDGE_SCRIPT="$PKA_DIR/tools/pekacek-extension/bridge.mjs"
 BRIDGE_PORT=3888
 BRIDGE_LOG="/tmp/pekacek-bridge.log"
 BRIDGE_PID_FILE="/tmp/pekacek-bridge.pid"
@@ -184,7 +184,7 @@ fi
 echo ""
 
 # --- Start Claude Code ---
-cd "$WIKI_DIR"
+cd "$PKA_DIR"
 
 if [ "${1:-}" = "--safe" ]; then
     echo "Spouštím Claude Code (safe mode)..."

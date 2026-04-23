@@ -11,10 +11,12 @@
 
 import http from "http";
 import { spawn } from "child_process";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const PORT = 3888;
 const CLAUDE_BIN = "claude";
-const WORKING_DIR = "/home/oposp/wiki";
+const WORKING_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 // Article session cache: pageUrl -> { title, sessionId }
 const articleCache = new Map();

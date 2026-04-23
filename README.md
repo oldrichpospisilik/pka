@@ -23,24 +23,24 @@ ls /mnt/p/Wiki/Wiki/index.md   # měl bys vidět wiki obsah
 
 ### 2. Symlink
 
-`~/wiki/wiki` je symlink na `/mnt/p/Wiki/Wiki/`. Pokud se rozbil (je to prázdný soubor místo symlinku):
+`~/pka/wiki` je symlink na `/mnt/p/Wiki/Wiki/`. Pokud se rozbil (je to prázdný soubor místo symlinku):
 
 ```bash
-rm ~/wiki/wiki
-ln -s /mnt/p/Wiki/Wiki ~/wiki/wiki
+rm ~/pka/wiki
+ln -s /mnt/p/Wiki/Wiki ~/pka/wiki
 ```
 
 ### 3. Claude Code
 
 ```bash
-cd ~/wiki
+cd ~/pka
 claude
 ```
 
 ## Struktura
 
 ```
-~/wiki/
+~/pka/
 ├── CLAUDE.md              ← instrukce pro Clauda (správce wiki)
 ├── README.md              ← tohle (instrukce pro tebe)
 ├── .env                   ← ČSFD credentials (CSFD_USERNAME, CSFD_PASSWORD)
@@ -48,11 +48,13 @@ claude
 ├── .mcp.json              ← MCP servery (ČSFD)
 ├── package.json           ← Node.js dependencies (playwright, dotenv)
 ├── csfd-rate.mjs          ← ČSFD skript (hodnocení, watchlist)
-├── raw/                   ← surové zdroje pro wiki ingest (lokální)
+├── start.sh               ← startup checklist + mount + launch Claude Code
 ├── wiki -> /mnt/p/Wiki/Wiki/  ← symlink na wiki obsah
-├── csfd-tool/SKILL.md     ← Claude skill: ČSFD integrace
-├── ebook-ingest/SKILL.md  ← Claude skill: třídění ebooků
-└── audiobook-ingest/SKILL.md ← Claude skill: třídění audioknih
+├── .claude/skills/        ← projektové skills (Claude Code je načte z .claude/skills/)
+│   ├── csfd/SKILL.md          ← ČSFD integrace
+│   ├── ebook-ingest/SKILL.md  ← třídění ebooků
+│   └── audiobook-ingest/SKILL.md ← třídění audioknih
+└── tools/                 ← pekacek Chrome extension + bridge, Windows .lnk
 ```
 
 ## Skripty
@@ -87,7 +89,7 @@ node csfd-rate.mjs watchlist-remove <url-nebo-id>
 
 ## Skills (Claude Code)
 
-Skills se Claudovi načtou automaticky při startu z `~/wiki/`. Nevoláš je ručně — Claude je použije, když řekneš relevantní věc.
+Skills se Claudovi načtou automaticky při startu z `~/pka/`. Nevoláš je ručně — Claude je použije, když řekneš relevantní věc.
 
 | Skill | Trigger | Co dělá |
 |---|---|---|
@@ -105,21 +107,20 @@ Definované v `.mcp.json`, Claude Code je načte při startu.
 
 ## Raw zdroje pro wiki
 
-Tři místa kam házíš raw vstupy pro ingest do wiki:
+Dvě místa kam házíš raw vstupy pro ingest do wiki:
 
 | Odkud | Cesta | Typické použití |
 |---|---|---|
-| WSL (lokálně) | `~/wiki/raw/` | Při práci v Claude Code |
 | pCloud (telefon/browser) | `/mnt/p/Wiki/raw/` | Z telefonu, prohlížeče |
 | Obsidian Web Clipper | `/mnt/p/Wiki/Wiki/_raw/` | Automaticky z browser extension |
 
-Claude při ingestu zkontroluje všechna tři místa.
+Claude při ingestu zkontroluje obě místa.
 
 ## Setup na novém stroji
 
 ```bash
-git clone https://github.com/oldrichpospisilik/pka.git ~/wiki
-cd ~/wiki
+git clone https://github.com/oldrichpospisilik/pka.git ~/pka
+cd ~/pka
 cp .env.example .env             # vyplnit ČSFD credentials (přezdívka + heslo)
 npm install                      # playwright, dotenv
 npx playwright install firefox   # browser pro ČSFD skripty (Chromium blokuje BotStopper)
