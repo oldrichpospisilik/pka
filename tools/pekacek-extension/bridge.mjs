@@ -13,6 +13,7 @@ import http from "http";
 import { spawn, spawnSync } from "child_process";
 import path from "path";
 import fs from "fs";
+import os from "os";
 import { fileURLToPath } from "url";
 
 const PORT = 3888;
@@ -55,6 +56,91 @@ function getArticleStats() {
   } catch (err) {
     process.stderr.write(`[bridge] getArticleStats error: ${err.message}\n`);
     return { count: 0, list: [], error: err.message };
+  }
+}
+
+// --- YouTube transcript (yt-dlp) ---
+const TRANSCRIPT_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+const TRANSCRIPT_TIMEOUT_MS = 45_000;
+const transcriptCache = new Map(); // videoId -> { transcript, language, updatedAt }
+
+function parseVTT(raw) {
+  const lines = raw.split(/\r?\n/);
+  const out = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (trimmed.startsWith("WEBVTT")) continue;
+    if (trimmed.startsWith("NOTE ") || trimmed === "NOTE") continue;
+    if (/^(Kind|Language):/i.test(trimmed)) continue;
+    if (/^\d{2}:\d{2}:\d{2}\.\d{3}\s*-->/.test(trimmed)) continue;
+    if (/^\d+$/.test(trimmed)) continue; // cue numbers
+    // Strip inline tags (<c>, <00:00:01.000>, <c.colorXXX>)
+    const cleaned = trimmed.replace(/<\/?[^>]+>/g, "").trim();
+    if (cleaned) out.push(cleaned);
+  }
+  // Deduplicate consecutive repeats (YT auto-caps often echo)
+  const deduped = [];
+  for (const l of out) {
+    if (deduped[deduped.length - 1] !== l) deduped.push(l);
+  }
+  return deduped.join(" ").replace(/\s+/g, " ").trim();
+}
+
+async function fetchYouTubeTranscript(videoId) {
+  const cached = transcriptCache.get(videoId);
+  if (cached && Date.now() - cached.updatedAt < TRANSCRIPT_TTL_MS) {
+    return cached;
+  }
+
+  const tmpdir = fs.mkdtempSync(path.join(os.tmpdir(), `yt-${videoId}-`));
+  try {
+    await new Promise((resolve, reject) => {
+      const proc = spawn("yt-dlp", [
+        "--write-auto-sub",
+        "--write-sub",
+        "--sub-lang", "cs,en",
+        "--sub-format", "vtt",
+        "--skip-download",
+        "--no-warnings",
+        "-o", path.join(tmpdir, "%(id)s.%(ext)s"),
+        `https://www.youtube.com/watch?v=${videoId}`,
+      ], { timeout: TRANSCRIPT_TIMEOUT_MS });
+
+      let stderr = "";
+      proc.stderr.on("data", (c) => (stderr += c));
+      proc.on("close", (code) => code === 0 ? resolve() : reject(new Error((stderr || `yt-dlp exit ${code}`).slice(0, 500))));
+      proc.on("error", (err) => reject(new Error(`Nelze spustit yt-dlp: ${err.message}`)));
+    });
+
+    const files = fs.readdirSync(tmpdir).filter((f) => f.endsWith(".vtt"));
+    if (files.length === 0) throw new Error("Žádný transcript není dostupný pro toto video");
+
+    // Priorita: cs manual > cs auto > en manual > en auto > cokoli
+    const priorityOrder = [`${videoId}.cs.vtt`, `${videoId}.en.vtt`];
+    const chosen =
+      priorityOrder.find((f) => files.includes(f)) ||
+      files.find((f) => /\.cs\./.test(f)) ||
+      files.find((f) => /\.en\./.test(f)) ||
+      files[0];
+
+    const lang = chosen.match(/\.([a-z]{2})(?:[-.][^.]*)?\.vtt$/)?.[1] || "?";
+    const raw = fs.readFileSync(path.join(tmpdir, chosen), "utf8");
+    const transcript = parseVTT(raw);
+
+    if (!transcript) throw new Error("Transcript je prázdný po parsování VTT");
+
+    const result = {
+      transcript,
+      language: lang,
+      length: transcript.length,
+      updatedAt: Date.now(),
+    };
+    transcriptCache.set(videoId, result);
+    process.stderr.write(`[bridge] YT transcript ${videoId} (${lang}): ${transcript.length} znaků\n`);
+    return result;
+  } finally {
+    try { fs.rmSync(tmpdir, { recursive: true, force: true }); } catch {}
   }
 }
 
@@ -206,6 +292,30 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ ok: true, pending: dashboardPending }));
   }
 
+  // YouTube transcript via yt-dlp (cached per videoId, TTL 24h)
+  if (req.method === "GET" && req.url.startsWith("/youtube/transcript")) {
+    const u = new URL(req.url, `http://localhost:${PORT}`);
+    const videoId = u.searchParams.get("videoId");
+    if (!videoId || !/^[A-Za-z0-9_-]{5,15}$/.test(videoId)) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ error: "Missing or invalid videoId" }));
+    }
+    try {
+      const result = await fetchYouTubeTranscript(videoId);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({
+        videoId,
+        transcript: result.transcript,
+        language: result.language,
+        length: result.length,
+      }));
+    } catch (err) {
+      process.stderr.write(`[bridge] YT transcript ${videoId} error: ${err.message}\n`);
+      res.writeHead(500, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ error: err.message }));
+    }
+  }
+
   // Forget cached article (on reset)
   if (req.method === "POST" && req.url.startsWith("/forget")) {
     const url = new URL(req.url, `http://localhost:${PORT}`);
@@ -278,7 +388,7 @@ const server = http.createServer(async (req, res) => {
           "-p", prompt,
           "--permission-mode", "acceptEdits",
           "--add-dir", "/mnt/p/Wiki/Wiki",
-          "--allowedTools", "Bash(node csfd-rate.mjs *) Bash(node tools/*) Bash(grep *) Bash(rg *) Bash(ls *) Bash(find *)",
+          "--allowedTools", "Bash(node csfd-rate.mjs *) Bash(node tools/*) Bash(grep *) Bash(rg *) Bash(ls *) Bash(find *) mcp__csfd__search mcp__csfd__get_movie mcp__csfd__get_creator mcp__csfd__get_user_ratings",
           "--output-format", "stream-json",
           "--verbose",
           "--include-partial-messages",
@@ -496,7 +606,7 @@ checkEnvironment();
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`
   ╔══════════════════════════════════════╗
-  ║   Pekáček Bridge v2.7.0             ║
+  ║   Pekáček Bridge v2.9.0             ║
   ║   http://localhost:${PORT}/             ║
   ║                                      ║
   ║   ( o_o) ☕  Čekám na extension...   ║

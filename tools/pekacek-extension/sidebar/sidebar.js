@@ -249,9 +249,15 @@ function loadTabInfo(retryCount = 0) {
         "about:",
         "newtab",
       ];
-      if (!skipPatterns.some((p) => url.includes(p))) {
-        offerToRead(title || "tato stránka", url);
+      if (skipPatterns.some((p) => url.includes(p))) return;
+
+      // YouTube → specialized flow
+      if (/youtube\.com\/watch|youtu\.be\//.test(url)) {
+        offerYouTube(title || "YouTube video", url);
+        return;
       }
+
+      offerToRead(title || "tato stránka", url);
     }
   });
 }
@@ -301,6 +307,234 @@ function offerToRead(title, url) {
   btnRow.appendChild(readBtn);
   btnRow.appendChild(skipBtn);
   msgEl.appendChild(btnRow);
+}
+
+// Offer YouTube-specific actions (shrň / watchlist / ingest)
+async function offerYouTube(fallbackTitle, url) {
+  const msgId = addMessage("pekacek",
+    `Vidím YouTube video — chvilku…`
+  );
+
+  const data = await extractPageContent();
+  const msgEl = document.getElementById(msgId);
+
+  if (!data || data.__error || data.type !== "youtube") {
+    // Content script failed (typicky YouTube ještě načítá) — fallback na obyčejný článek flow
+    msgEl.remove();
+    offerToRead(fallbackTitle, url);
+    return;
+  }
+
+  const meta = [
+    data.channel ? `📺 ${data.channel}` : null,
+    data.duration ? `⏱ ${data.duration}` : null,
+  ].filter(Boolean).join(" · ");
+
+  msgEl.querySelector(".message-content").innerHTML = formatMessage(
+    `Vidím YouTube video: **${truncate(data.title, 60)}**` +
+    (meta ? `\n${meta}` : "") +
+    `\n\nCo s tím?`
+  );
+
+  const btnCol = document.createElement("div");
+  btnCol.style.cssText = "margin-top: 8px; display: flex; flex-direction: column; gap: 5px;";
+
+  const actions = [
+    { icon: "💬", label: "Shrň rychle (z popisku)", handler: () => summarizeYouTube(data) },
+    { icon: "📝", label: "Shrň důkladně (s transcriptem)", handler: () => summarizeYouTubeWithTranscript(data) },
+    { icon: "📄", label: "Zobraz transcript", handler: () => showYouTubeTranscript(data), keep: true },
+    { icon: "🎬", label: "Film/seriál → přidat na ČSFD watchlist", handler: () => youtubeToWatchlist(data) },
+    { icon: "📚", label: "Naučné → ingest do wiki", handler: () => ingestYouTube(data) },
+    { icon: "⏭", label: "Přeskoč", handler: () => {} },
+  ];
+
+  for (const a of actions) {
+    const btn = document.createElement("button");
+    btn.textContent = `${a.icon}  ${a.label}`;
+    btn.style.cssText = "padding: 6px 10px; border: 1px solid var(--text-muted); border-radius: 5px; background: var(--bg-card); color: var(--text); font-size: 12px; cursor: pointer; text-align: left; font-family: var(--sans);";
+    btn.addEventListener("mouseenter", () => { btn.style.borderColor = "var(--green)"; btn.style.color = "var(--green)"; });
+    btn.addEventListener("mouseleave", () => { btn.style.borderColor = "var(--text-muted)"; btn.style.color = "var(--text)"; });
+    btn.addEventListener("click", () => {
+      if (!a.keep) btnCol.remove();
+      a.handler();
+    });
+    btnCol.appendChild(btn);
+  }
+
+  msgEl.appendChild(btnCol);
+}
+
+function youtubeMetaBlock(data) {
+  return (
+    `Název: ${data.title}\n` +
+    `Kanál: ${data.channel || "(neznámý)"}\n` +
+    (data.duration ? `Délka: ${data.duration}\n` : "") +
+    `URL: ${data.url}\n\n` +
+    `Popis videa:\n${data.description || "(prázdný / YouTube nevrací description)"}`
+  );
+}
+
+async function fetchYouTubeTranscript(videoId) {
+  const res = await fetch(`${BRIDGE_URL}/youtube/transcript?videoId=${encodeURIComponent(videoId)}`);
+  const payload = await res.json().catch(() => ({ error: "Neplatná odpověď bridge" }));
+  if (!res.ok || payload.error) throw new Error(payload.error || `HTTP ${res.status}`);
+  return payload; // { transcript, language, length }
+}
+
+// Přeláme dlouhý jednolinkový text na čitelné odstavce.
+// Preferuje sentence break (interpunkce), fallback po ~35 slovech.
+function prettifyTranscript(text) {
+  const hasPunct = /[.!?][ \n][A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]/.test(text);
+  if (hasPunct) {
+    return text.replace(/([.!?])\s+([A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ])/g, "$1\n$2");
+  }
+  const words = text.split(/\s+/);
+  const chunks = [];
+  for (let i = 0; i < words.length; i += 35) {
+    chunks.push(words.slice(i, i + 35).join(" "));
+  }
+  return chunks.join("\n");
+}
+
+async function showYouTubeTranscript(data) {
+  addMessage("user", `📄 Ukaž transcript`);
+  const placeholderId = addMessage("pekacek", "Stahuji transcript…", true);
+
+  try {
+    const t = await fetchYouTubeTranscript(data.videoId);
+    removeMessage(placeholderId);
+
+    const lenKb = (t.length / 1000).toFixed(1);
+    const id = `msg-${++messageCounter}`;
+    const div = document.createElement("div");
+    div.className = "message pekacek";
+    div.id = id;
+    div.dataset.rawText = t.transcript;
+
+    const header = document.createElement("div");
+    header.className = "message-content";
+    header.innerHTML =
+      `<strong>📄 Transcript</strong> ` +
+      `<span style="color: var(--text-dim); font-size: 11px;">` +
+      `(${t.language}, ${lenKb}k znaků)` +
+      `</span>`;
+    div.appendChild(header);
+
+    const pre = document.createElement("pre");
+    pre.className = "transcript-block";
+    pre.textContent = prettifyTranscript(t.transcript);
+    div.appendChild(pre);
+
+    // Copy button (standard pekacek pattern)
+    const copyBtn = document.createElement("button");
+    copyBtn.className = "copy-btn";
+    copyBtn.title = "Zkopírovat transcript";
+    copyBtn.textContent = "⧉";
+    copyBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      try {
+        await navigator.clipboard.writeText(t.transcript);
+        copyBtn.textContent = "✓";
+        copyBtn.classList.add("copied");
+        setTimeout(() => { copyBtn.textContent = "⧉"; copyBtn.classList.remove("copied"); }, 1500);
+      } catch {
+        copyBtn.textContent = "✗";
+        setTimeout(() => { copyBtn.textContent = "⧉"; }, 1500);
+      }
+    });
+    div.appendChild(copyBtn);
+
+    messagesEl.appendChild(div);
+    scrollToBottom();
+  } catch (err) {
+    removeMessage(placeholderId);
+    addMessage("pekacek", `Transcript se nepodařilo stáhnout: ${err.message}`);
+    tempFace("worried", "animate-error");
+  }
+}
+
+async function summarizeYouTubeWithTranscript(data) {
+  addMessage("user", `📝 Shrň důkladně "${truncate(data.title, 40)}"`);
+  const placeholderId = addMessage("pekacek", "Stahuji transcript přes yt-dlp…", true);
+
+  try {
+    const t = await fetchYouTubeTranscript(data.videoId);
+    removeMessage(placeholderId);
+
+    const lenKb = (t.length / 1000).toFixed(1);
+    const prompt =
+      `Uživatel chce kvalitní shrnutí YouTube videa z transcriptu.\n\n` +
+      youtubeMetaBlock(data) + `\n\n` +
+      `Transcript (jazyk: ${t.language}, ${lenKb}k znaků):\n---\n${t.transcript}\n---\n\n` +
+      `Shrň strukturovaně:\n` +
+      `(1) 1–2 věty o čem to je.\n` +
+      `(2) 4–6 klíčových myšlenek v bulletech.\n` +
+      `(3) Pro koho to je / komu to doporučit.\n` +
+      `(4) Pokud je to naučné, navrhni jestli má smysl to ingestovat do wiki (a do jaké kategorie).`;
+
+    sendToBridge(prompt, { saveArticle: true, articleTitle: data.title, action: "summarize" });
+    articleRead = true;
+    lastReadUrl = data.url;
+  } catch (err) {
+    removeMessage(placeholderId);
+    addMessage("pekacek",
+      `Transcript se nepodařilo stáhnout: ${err.message}\n\n` +
+      `Nejspíš video nemá captions (nebo yt-dlp narazil na YT rate-limit). Shrnu z popisku.`
+    );
+    summarizeYouTube(data);
+  }
+}
+
+function summarizeYouTube(data) {
+  addMessage("user", `Shrň video "${truncate(data.title, 40)}"`);
+  const prompt =
+    `Uživatel se dívá na YouTube video. Pekáček nemá přístup k transcriptu, jen k metadatům a popisku. ` +
+    `Na základě toho co máš: shrň o čem video je a co si z něj divák může odnést (pokud to jde odhadnout). ` +
+    `Pokud je popis chudý nebo generický, řekni to upřímně — lepší než si vymýšlet. ` +
+    `Ideálně na konci navrhni, jestli stojí za to pustit celé (a proč), nebo jestli to vypadá přeskočitelně.\n\n` +
+    youtubeMetaBlock(data);
+  sendToBridge(prompt, { saveArticle: true, articleTitle: data.title, action: "summarize" });
+  articleRead = true;
+  lastReadUrl = data.url;
+}
+
+function youtubeToWatchlist(data) {
+  addMessage("user", `Je to film/seriál? Přidat na ČSFD watchlist`);
+  const prompt =
+    `Uživatel chce z YouTube videa případně přidat film nebo seriál na svůj ČSFD watchlist.\n\n` +
+    youtubeMetaBlock(data) + `\n\n` +
+    `Postup:\n` +
+    `1) Vyhodnoť z názvu a kanálu, jestli jde o **samotný film nebo seriál** (ne trailer, ne recenze, ne video esej, ne reakce).\n` +
+    `2) Pokud je to jasný titul filmu/seriálu: zavolej \`mcp__csfd__search\` s názvem (očisti ho — odstraň "(official)", "HD", "4K", "full movie", rok v závorkách atd.). Pokud najdeš přesvědčivý match, přidej ho přes \`node csfd-rate.mjs watchlist-add <csfd-url>\` a potvrď.\n` +
+    `3) Pokud je to video *o* filmu (rozbor, trailer, recenze): zeptej se uživatele jaký film by měl dostat na watchlist — odvoď ze názvu a nabídni ho.\n` +
+    `4) Pokud to vůbec není filmový obsah, řekni to a neprováděj žádnou akci.`;
+  sendToBridge(prompt, { action: "quick" });
+}
+
+async function ingestYouTube(data) {
+  addMessage("user", `📚 Ingest YouTube videa do wiki`);
+  const placeholderId = addMessage("pekacek", "Stahuji transcript (pokud existuje)…", true);
+
+  let transcriptBlock = "";
+  try {
+    const t = await fetchYouTubeTranscript(data.videoId);
+    const lenKb = (t.length / 1000).toFixed(1);
+    transcriptBlock = `\n\nTranscript (jazyk: ${t.language}, ${lenKb}k znaků):\n---\n${t.transcript}\n---\n`;
+  } catch {
+    transcriptBlock = `\n\n⚠ Transcript není dostupný (yt-dlp selhal / video bez captions) — pracuj jen s popiskem.\n`;
+  }
+  removeMessage(placeholderId);
+
+  const prompt =
+    `Uživatel chce ingestovat tento YouTube obsah do wiki. Zpracuj podle CLAUDE.md ingest workflow — ` +
+    `urči kategorii, vytvoř wiki stránku, propoj s existujícími přes [[wiki-links]], aktualizuj index.md a log.md.\n\n` +
+    `**Vstup je YouTube video.** Pokud máš transcript, extrahuj z něj klíčové myšlenky (stejně jako u článku). ` +
+    `Pokud transcript chybí a popis je chudý, založ jen metadata stránku s odkazem a poznámkou ` +
+    `"⚠ bez transcriptu — doplnit po zhlédnutí". Do frontmatter / metadat dej status \`chci-videt\` pokud ` +
+    `je to něco co se má teprve pustit, nebo \`videno\` pokud uživatel dodá že už to viděl.\n\n` +
+    youtubeMetaBlock(data) + transcriptBlock;
+
+  sendToBridge(prompt, { action: "ingest" });
 }
 
 // Read article into session + give opinion

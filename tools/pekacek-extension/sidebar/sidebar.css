@@ -649,6 +649,32 @@ body {
   word-break: break-word;
 }
 
+/* YouTube transcript — scrollable pre block */
+.transcript-block {
+  max-height: 300px;
+  min-height: 80px;
+  overflow-y: auto;
+  resize: vertical;
+  background: var(--bg);
+  border: 1px solid var(--text-muted);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: var(--text);
+}
+.transcript-block::-webkit-scrollbar {
+  width: 6px;
+}
+.transcript-block::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: 3px;
+}
+
 .message-content code {
   font-family: var(--mono);
   font-size: 12px;

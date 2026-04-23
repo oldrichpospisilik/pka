@@ -5,6 +5,37 @@ Semver: `MAJOR.MINOR.PATCH`.
 - **MINOR** — nové feature, zpětně kompatibilní
 - **PATCH** — bugfixy, drobné úpravy
 
+## 2.9.1 — 2026-04-23
+
+### Nové
+- **📄 Zobraz transcript** — nové tlačítko v YouTube flow. Stáhne transcript (stejným endpointem jako shrnutí, takže sdílí 24 h cache) a vykreslí ho do scrollovatelného `<pre>` bloku v chatu. Block má `resize: vertical`, copy button a sentence-break prettifier (láme odstavce po interpunkci, nebo fallback po ~35 slovech u auto-caps bez teček).
+- Na rozdíl od ostatních YT akcí tlačítka po kliku na 📄 **nezmizí** — transcript je read-only peek, chceš po něm klidně pokračovat na shrnutí nebo ingest bez nutnosti resetu.
+
+## 2.9.0 — 2026-04-23
+
+### Nové
+- **YouTube transcript přes yt-dlp.** Bridge endpoint `GET /youtube/transcript?videoId=X` spustí `yt-dlp --write-auto-sub --write-sub --sub-lang cs,en --sub-format vtt --skip-download` do `/tmp/yt-<id>-XXX/`, rozparsuje VTT (zahodí timestampy, WEBVTT header, cue numbery, inline tagy jako `<c>` / `<00:00:01>`, dedupnuje echa z auto-caps) a vrátí plain text. Cache per videoId TTL 24 h. Priorita: `cs.vtt` > `en.vtt` > cokoli jiného.
+- **Nové tlačítko 📝 "Shrň důkladně (s transcriptem)"** v YouTube flow — vedle rychlého 💬 shrnutí z popisku. Po kliku: stáhne transcript, pošle ho Claudovi s promptem na strukturované shrnutí (o čem to je · 4–6 klíčových myšlenek · komu to doporučit · doporučení ingest do wiki).
+- **📚 Ingest YouTube** teď taky nejprve zkusí transcript. Pokud je, Claude ho dostane jako zdrojový text a ingest má stejnou kvalitu jako u článku. Pokud ne (video bez captions, yt-dlp selhal), fallback na metadata-only s poznámkou "⚠ bez transcriptu — doplnit po zhlédnutí".
+- **Graceful fallback** — pokud `yt-dlp` není instalované / selže / video nemá captions, YT tlačítka stejně fungují (fallback na popis + upřímná hláška uživateli).
+
+### Závislosti
+- `yt-dlp` musí být v PATH (`apt install yt-dlp` nebo `pip install yt-dlp`).
+
+## 2.8.0 — 2026-04-23
+
+### Nové
+- **YouTube handler.** Když je aktivní tab YouTube video (`youtube.com/watch` nebo `youtu.be/`), sidebar nenabízí *"Přečti si ho"* jako u článku, ale YouTube-specific flow:
+  - 💬 **Shrň obsah (z popisku)** — Claude shrne o čem video je z metadat + description. Upřímně řekne když je popis chudý a shrnutí by bylo spekulace.
+  - 🎬 **Film/seriál → přidat na ČSFD watchlist** — Claude vyhodnotí z názvu jestli jde o samotný film/seriál, použije `mcp__csfd__search`, při match volá `node csfd-rate.mjs watchlist-add`. U rozborů/recenzí/trailerů nabídne související titul.
+  - 📚 **Naučné → ingest do wiki** — standardní ingest podle CLAUDE.md workflow, ale s vědomím že nemá transcript; pokud je popis chudý, založí stránku s metadaty a poznámkou "⚠ bez transcriptu — doplnit po zhlédnutí".
+  - ⏭ **Přeskoč** — zavře nabídku.
+- **Content script rozšířen** o YouTube extraction. Z `og:*` meta tagů a DOM selektorů vytáhne `videoId`, `title`, `channel`, `description` (do 3000 znaků), `duration`. Payload má `type: "youtube"` a i plaintext `text` (metadata + description), aby fungoval kontext v chatu.
+- **Bridge allowedTools** v `/ask` endpointu teď zahrnuje `mcp__csfd__search`, `mcp__csfd__get_movie`, `mcp__csfd__get_creator`, `mcp__csfd__get_user_ratings` — nutné aby YouTube→watchlist akce proběhla bez permission promptu v headless módu.
+
+### Známá omezení
+- **Transcript se zatím nestahuje** — Claude pracuje jen s metadaty a popiskem. Pro video esej / dlouhou přednášku to znamená omezené shrnutí. Transcript přes headless browser je kandidát na v2.9.
+
 ## 2.7.0 — 2026-04-23
 
 ### Nové
