@@ -87,10 +87,16 @@ function parseVTT(raw) {
   return deduped.join(" ").replace(/\s+/g, " ").trim();
 }
 
-async function fetchYouTubeTranscript(videoId) {
-  const cached = transcriptCache.get(videoId);
-  if (cached && Date.now() - cached.updatedAt < TRANSCRIPT_TTL_MS) {
-    return cached;
+async function fetchYouTubeTranscript(videoId, { force = false } = {}) {
+  if (!force) {
+    const cached = transcriptCache.get(videoId);
+    if (cached && Date.now() - cached.updatedAt < TRANSCRIPT_TTL_MS) {
+      process.stderr.write(`[bridge] YT transcript ${videoId} (cache hit, ${cached.language}, ${cached.transcript.length} znaků)\n`);
+      return cached;
+    }
+  } else {
+    transcriptCache.delete(videoId);
+    process.stderr.write(`[bridge] YT transcript ${videoId} (force refresh — cache busted)\n`);
   }
 
   const tmpdir = fs.mkdtempSync(path.join(os.tmpdir(), `yt-${videoId}-`));
@@ -137,7 +143,7 @@ async function fetchYouTubeTranscript(videoId) {
       updatedAt: Date.now(),
     };
     transcriptCache.set(videoId, result);
-    process.stderr.write(`[bridge] YT transcript ${videoId} (${lang}): ${transcript.length} znaků\n`);
+    process.stderr.write(`[bridge] YT transcript ${videoId} (fresh, ${lang}): ${transcript.length} znaků\n`);
     return result;
   } finally {
     try { fs.rmSync(tmpdir, { recursive: true, force: true }); } catch {}
@@ -292,16 +298,17 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ ok: true, pending: dashboardPending }));
   }
 
-  // YouTube transcript via yt-dlp (cached per videoId, TTL 24h)
+  // YouTube transcript via yt-dlp (cached per videoId, TTL 24h). Pass ?force=1 to bust cache.
   if (req.method === "GET" && req.url.startsWith("/youtube/transcript")) {
     const u = new URL(req.url, `http://localhost:${PORT}`);
     const videoId = u.searchParams.get("videoId");
+    const force = u.searchParams.get("force") === "1";
     if (!videoId || !/^[A-Za-z0-9_-]{5,15}$/.test(videoId)) {
       res.writeHead(400, { "Content-Type": "application/json" });
       return res.end(JSON.stringify({ error: "Missing or invalid videoId" }));
     }
     try {
-      const result = await fetchYouTubeTranscript(videoId);
+      const result = await fetchYouTubeTranscript(videoId, { force });
       res.writeHead(200, { "Content-Type": "application/json" });
       return res.end(JSON.stringify({
         videoId,
@@ -353,7 +360,7 @@ const server = http.createServer(async (req, res) => {
     req.on("data", (chunk) => (body += chunk));
     req.on("end", () => {
       try {
-        const { prompt, pageUrl, saveArticle, articleTitle } = JSON.parse(body);
+        const { prompt, pageUrl, saveArticle, articleTitle, claudeSessionId } = JSON.parse(body);
 
         if (!prompt) {
           res.writeHead(400, { "Content-Type": "application/json" });
@@ -365,7 +372,10 @@ const server = http.createServer(async (req, res) => {
         const log = (msg) => process.stderr.write(`[bridge ${ts()}] [${reqId}] ${msg}\n`);
 
         // Check if we have an existing session for this page (follow-up)
-        const cachedSession = pageUrl && !saveArticle ? articleCache.get(pageUrl) : null;
+        // Priority: explicit claudeSessionId from client (persistent history) > articleCache by pageUrl
+        const cachedSession = claudeSessionId
+          ? { sessionId: claudeSessionId, title: articleTitle || pageUrl || "(restored)" }
+          : (pageUrl && !saveArticle ? articleCache.get(pageUrl) : null);
 
         log(`START prompt=${prompt.slice(0, 80)}...`);
 
@@ -437,6 +447,8 @@ const server = http.createServer(async (req, res) => {
 
               // Capture session_id from init event
               if (event.type === "system" && event.subtype === "init" && event.session_id) {
+                // Emit to client for persistent history tracking
+                res.write(`data: ${JSON.stringify({ type: "claude-session", sessionId: event.session_id })}\n\n`);
                 if (saveArticle && pageUrl) {
                   articleCache.set(pageUrl, {
                     title: articleTitle || pageUrl,
@@ -606,7 +618,7 @@ checkEnvironment();
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`
   ╔══════════════════════════════════════╗
-  ║   Pekáček Bridge v2.9.0             ║
+  ║   Pekáček Bridge v2.10.1            ║
   ║   http://localhost:${PORT}/             ║
   ║                                      ║
   ║   ( o_o) ☕  Čekám na extension...   ║

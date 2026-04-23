@@ -5,6 +5,29 @@ Semver: `MAJOR.MINOR.PATCH`.
 - **MINOR** — nové feature, zpětně kompatibilní
 - **PATCH** — bugfixy, drobné úpravy
 
+## 2.10.1 — 2026-04-23
+
+### Opravy
+- **Otevření sidebaru s existující session už neuvede "Vidím článek" znova.** Dva bugs:
+  1. **Race condition** — `loadTabInfo()` fire před dokončením `initSession()` / `restoreSessionFromStorage()`, takže `articleRead` a `lastReadUrl` byly ještě `false`/`null`. Fix: `loadTabInfo()` teď běží až po `await initSession()`.
+  2. **Chyběla kontrola historie session** — i po dotažení session, kdy `articleRead=false` (typicky pokud jsi dřív skipnul nabídku ale chatoval ručně), nabídka znovu vyskočila. Fix: pokud má aktuální session ≥ 1 zprávu, nabídka se neukazuje (pokračuješ v konverzaci).
+- **YouTube SPA navigace detekována.** Když jsi na YT a přeskočil na jiné video bez reloadu (SPA history API), sidebar to teď zachytí. `background.js` naslouchá `chrome.tabs.onUpdated` a posílá `tab-url-changed` message, sidebar na něj resetuje `currentPageContent` / `articleRead` / `lastReadUrl` a znovu volá `loadTabInfo` → nová YT nabídka s čerstvým `videoId`. Dřív ti v chatu zůstávala stará offer tlačítka s closurovaným `videoId` → klik na 📄 vracel transcript předchozího videa z cache.
+- **Shift+Klik na 📄 = force refresh** transcript cache pro aktuální video. Bridge endpoint teď zná `?force=1` (invaliduje cache entry pro daný `videoId` a stáhne znovu). User message se označí *"(force refresh)"* a placeholder *"Stahuji transcript znovu (bez cache)…"*, ať je jasné co se děje.
+- Bridge logy transcriptů jsou teď čitelnější: `cache hit` / `fresh` / `force refresh` s jazykem a délkou.
+
+## 2.10.0 — 2026-04-23
+
+### Nové
+- **Persistentní stav konverzací** přes `chrome.storage.local` (klíče `pekacek.sessions` a `pekacek.currentSessionId`). Každá session má `id`, `title` (auto-odvozený z prvního user promptu), `url` (pokud nad článkem/videem), `createdAt`, `updatedAt`, `messages[{role, rawText, at}]`, `articleRead`, `claudeSessionId`. Drží se **max 30** konverzací (nejstarší se odmazávají).
+- **Zapamatuje aktuální session přes restart sidebaru** — když ho zavřeš a otevřeš, pokračuješ ve stejné konverzaci (ne v prázdném chatu). Aktuální session je explicitně uložené id.
+- **📚 Historie (tlačítko v avataru, vedle ↻)** — overlay se seznamem uložených konverzací. Každá položka: titul, čas *"před N min/h/dny"*, počet zpráv, 🔗 indikátor pokud je vázaná na URL. Klik = načte zpět do chatu. Hover → ✕ pro smazání (s confirm).
+- **↻ Reset** teď **nezmaže konverzaci** — archivuje ji do historie a zakládá novou (oba kroky automaticky). Tooltip aktualizován: *"Nová konverzace (aktuální uložit do historie)"*.
+- **Claude session continuity.** Bridge přijímá v `/ask` body `claudeSessionId`, priorita před `articleCache` lookupem. Nový SSE event `claude-session` nese Claude ID zpátky klientovi při každém initu → sidebar ho uloží do current session. Při obnovení historie se poslední `claudeSessionId` přilepí k dalšímu promptu a Claude pokračuje s plným kontextem (funguje i po restartu bridgi — Claude Code session storage je persistentní).
+
+### Známá omezení
+- Po obnovení ze storage se **one-shot UI** nerekonstruuje: offer tlačítka (*Přečti si ho / YouTube akce*) a scrollovatelný transcript `<pre>` blok jsou v historii jen jako text. Pro transcript stačí kliknout 📄 znovu.
+- `messages` se ukládají jen jako `rawText` (markdown) — bohatý rendering (copy/pin buttony) se skládá znovu, ale vlastní formátování (code bloky, ASCII diagramy) vypadá stejně.
+
 ## 2.9.1 — 2026-04-23
 
 ### Nové

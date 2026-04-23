@@ -199,6 +199,21 @@ chrome.action.onClicked.addListener(() => {
   chrome.action.setBadgeText({ text: "" });
 });
 
+// Notify sidebar when the active tab's URL changes (includes YouTube SPA navigation).
+// Without this, sidebar's YT offer keeps stale videoId and cached transcript is "wrong".
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (!changeInfo.url) return;
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (!tabs[0] || tabs[0].id !== tabId) return;
+    try {
+      chrome.runtime.sendMessage(
+        { type: "tab-url-changed", url: changeInfo.url, title: tab.title || "" },
+        () => { void chrome.runtime.lastError; /* sidebar not open = OK */ }
+      );
+    } catch {}
+  });
+});
+
 // --- Bridge communication ---
 
 async function checkBridge() {

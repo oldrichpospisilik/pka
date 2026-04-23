@@ -7,11 +7,21 @@
 <body>
   <!-- Pekacek avatar -->
   <div id="pekacek-avatar">
-    <button id="reset-btn" title="Vyčistit chat a zeptat se znovu">↻</button>
+    <button id="history-btn" title="Historie konverzací">&#x1F4DA;</button>
+    <button id="reset-btn" title="Nová konverzace (aktuální uložit do historie)">↻</button>
     <div id="pekacek-face" class="animate-idle">
   ( o_o)
   /|___|\
    / \</div>
+  </div>
+
+  <!-- History panel (hidden by default) -->
+  <div id="history-panel" class="hidden">
+    <div class="history-header">
+      <span>&#x1F4DA; Historie konverzací</span>
+      <button id="history-close" title="Zavřít">&#x2715;</button>
+    </div>
+    <div id="history-list">—</div>
   </div>
 
   <!-- Dashboard chip (📰 · 📬 · 📅) -->

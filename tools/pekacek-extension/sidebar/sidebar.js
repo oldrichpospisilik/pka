@@ -29,6 +29,175 @@ let lastReadUrl = null;    // URL of the article in session
 let currentStreamId = null; // reqId of in-flight /ask request (for Stop)
 let currentAbortCtrl = null; // AbortController pro aktuální stream
 
+// --- Session persistence (chrome.storage.local) ---
+const SESSIONS_KEY = "pekacek.sessions";
+const CURRENT_SESSION_KEY = "pekacek.currentSessionId";
+const MAX_SESSIONS = 30;
+let currentSession = null;           // { id, title, url, createdAt, updatedAt, messages, articleRead, claudeSessionId }
+let isRestoringSession = false;      // when true, addMessage skips persistence
+
+function makeSessionId() {
+  return "s-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+}
+
+function startNewSession() {
+  currentSession = {
+    id: makeSessionId(),
+    title: "Nová konverzace",
+    url: null,
+    urlTitle: null,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    messages: [],
+    articleRead: false,
+    claudeSessionId: null,
+  };
+  try { chrome.storage.local.set({ [CURRENT_SESSION_KEY]: currentSession.id }); } catch {}
+}
+
+async function listSessions() {
+  try {
+    const r = await chrome.storage.local.get(SESSIONS_KEY);
+    return r[SESSIONS_KEY] || [];
+  } catch { return []; }
+}
+
+async function saveSessions(sessions) {
+  try { await chrome.storage.local.set({ [SESSIONS_KEY]: sessions }); } catch {}
+}
+
+async function persistCurrentSession() {
+  if (!currentSession || currentSession.messages.length === 0) return;
+  currentSession.updatedAt = Date.now();
+  currentSession.articleRead = articleRead;
+  if (!currentSession.url && currentPageContent?.url) {
+    currentSession.url = currentPageContent.url;
+    currentSession.urlTitle = currentPageContent.title || null;
+  }
+  const sessions = await listSessions();
+  const idx = sessions.findIndex((s) => s.id === currentSession.id);
+  if (idx >= 0) sessions[idx] = currentSession;
+  else sessions.unshift(currentSession);
+  sessions.sort((a, b) => b.updatedAt - a.updatedAt);
+  while (sessions.length > MAX_SESSIONS) sessions.pop();
+  await saveSessions(sessions);
+}
+
+function recordMessage(role, rawText) {
+  if (isRestoringSession) return;
+  if (!currentSession) startNewSession();
+  currentSession.messages.push({ role, rawText, at: Date.now() });
+  if (currentSession.title === "Nová konverzace" && role === "user" && rawText?.trim()) {
+    currentSession.title = rawText.trim().slice(0, 80);
+  }
+  persistCurrentSession();
+}
+
+async function deleteSessionFromStorage(id) {
+  const sessions = await listSessions();
+  await saveSessions(sessions.filter((s) => s.id !== id));
+  if (currentSession?.id === id) {
+    startNewSession();
+    messagesEl.innerHTML = "";
+    messageCounter = 0;
+  }
+}
+
+async function restoreSessionFromStorage(id) {
+  const sessions = await listSessions();
+  const s = sessions.find((x) => x.id === id);
+  if (!s) return false;
+
+  isRestoringSession = true;
+  try {
+    messagesEl.innerHTML = "";
+    messageCounter = 0;
+    for (const m of s.messages || []) {
+      addMessage(m.role, m.rawText || "", false);
+    }
+    currentSession = s;
+    articleRead = !!s.articleRead;
+    lastReadUrl = s.url || null;
+    try { chrome.storage.local.set({ [CURRENT_SESSION_KEY]: s.id }); } catch {}
+    scrollToBottom(true);
+    statusText.textContent = `Obnovena: ${truncate(s.title, 30)}`;
+    statusText.style.color = "#4ecca3";
+    setTimeout(() => {
+      statusText.textContent = "Připraveny";
+      statusText.style.color = "";
+    }, 2500);
+    return true;
+  } finally {
+    isRestoringSession = false;
+  }
+}
+
+function formatAgo(ms) {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return "před chvílí";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `před ${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `před ${h} h`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `před ${d} dny`;
+  return new Date(Date.now() - ms).toLocaleDateString("cs-CZ");
+}
+
+async function openHistoryPanel() {
+  const panel = document.getElementById("history-panel");
+  const list = document.getElementById("history-list");
+  panel.classList.remove("hidden");
+  list.innerHTML = '<div class="history-empty">Načítám…</div>';
+
+  const sessions = await listSessions();
+  if (sessions.length === 0) {
+    list.innerHTML = '<div class="history-empty">— žádné uložené konverzace —</div>';
+    return;
+  }
+
+  list.innerHTML = "";
+  for (const s of sessions) {
+    const item = document.createElement("div");
+    item.className = "history-item";
+    if (s.id === currentSession?.id) item.classList.add("current");
+
+    const titleDiv = document.createElement("div");
+    titleDiv.className = "history-item-title";
+    titleDiv.textContent = s.title || "(bez názvu)";
+
+    const metaDiv = document.createElement("div");
+    metaDiv.className = "history-item-meta";
+    const msgCount = s.messages?.length || 0;
+    const urlMark = s.url ? " · 🔗" : "";
+    metaDiv.textContent = `${formatAgo(Date.now() - s.updatedAt)} · ${msgCount} zpráv${urlMark}`;
+
+    item.appendChild(titleDiv);
+    item.appendChild(metaDiv);
+
+    item.addEventListener("click", async () => {
+      panel.classList.add("hidden");
+      if (s.id !== currentSession?.id) {
+        await restoreSessionFromStorage(s.id);
+      }
+    });
+
+    const delBtn = document.createElement("button");
+    delBtn.className = "history-item-del";
+    delBtn.textContent = "✕";
+    delBtn.title = "Smazat";
+    delBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (!confirm(`Smazat "${truncate(s.title || "(bez názvu)", 40)}"?`)) return;
+      await deleteSessionFromStorage(s.id);
+      openHistoryPanel(); // refresh
+    });
+    item.appendChild(delBtn);
+
+    list.appendChild(item);
+  }
+}
+
 // --- DOM ---
 const face = document.getElementById("pekacek-face");
 const statusText = document.getElementById("status-text");
@@ -39,6 +208,22 @@ const sendBtn = document.getElementById("send-btn");
 const stopBtn = document.getElementById("stop-btn");
 
 // --- Init ---
+async function initSession() {
+  try {
+    const r = await chrome.storage.local.get(CURRENT_SESSION_KEY);
+    const id = r[CURRENT_SESSION_KEY];
+    if (id) {
+      const ok = await restoreSessionFromStorage(id);
+      if (!ok) startNewSession();
+    } else {
+      startNewSession();
+    }
+  } catch {
+    startNewSession();
+  }
+}
+
+// Non-session things start immediately
 loadDashboard();
 checkBridgeStatus();
 setFace("wave", "animate-wave");
@@ -50,12 +235,22 @@ setTimeout(() => {
 // Clear any pending badge — user is looking at the sidebar now
 try { chrome.runtime.sendMessage({ type: "clear-badge" }, () => {}); } catch {}
 
-// Get tab info and offer to read (no content script needed)
-setTimeout(() => loadTabInfo(), 500);
+// Restore session first, then load tab info — otherwise articleRead/lastReadUrl
+// from storage aren't applied yet and offer pops up over existing chat.
+(async function () {
+  await initSession();
+  loadTabInfo();
+})();
 
-// Reset button
+// Reset button — archives current session (auto-persisted) and starts fresh
 document.getElementById("reset-btn").addEventListener("click", () => {
   resetChat();
+});
+
+// History button — opens overlay with past sessions
+document.getElementById("history-btn").addEventListener("click", openHistoryPanel);
+document.getElementById("history-close").addEventListener("click", () => {
+  document.getElementById("history-panel").classList.add("hidden");
 });
 
 // Stop button
@@ -97,7 +292,10 @@ function resetChat() {
       .catch(() => {});
   }
 
-  // Clear messages
+  // Archive current session (auto-persisted on each message) and start fresh
+  startNewSession();
+
+  // Clear DOM
   messagesEl.innerHTML = "";
   messageCounter = 0;
 
@@ -107,7 +305,7 @@ function resetChat() {
   currentPageContent = null;
 
   hideNewMessagesButton();
-  statusText.textContent = "Pripraveny";
+  statusText.textContent = "Připraveny";
   statusText.style.color = "";
   tempFace("chill", "animate-idle", 1500);
 
@@ -240,8 +438,11 @@ function loadTabInfo(retryCount = 0) {
 
     pageIndicator.textContent = title ? truncate(title, 35) : "—";
 
-    // Offer to read
+    // Offer to read — ale jen pokud nemáme rozběhnutou konverzaci
     if (!articleRead && url && url !== lastReadUrl) {
+      // Pokud aktuální session už má zprávy, uživatel s Pekáčkem mluvil → neopakovat nabídku
+      if ((currentSession?.messages?.length || 0) > 0) return;
+
       const skipPatterns = [
         "google.com/search",
         "chrome://",
@@ -342,7 +543,7 @@ async function offerYouTube(fallbackTitle, url) {
   const actions = [
     { icon: "💬", label: "Shrň rychle (z popisku)", handler: () => summarizeYouTube(data) },
     { icon: "📝", label: "Shrň důkladně (s transcriptem)", handler: () => summarizeYouTubeWithTranscript(data) },
-    { icon: "📄", label: "Zobraz transcript", handler: () => showYouTubeTranscript(data), keep: true },
+    { icon: "📄", label: "Zobraz transcript", title: "Klik = cache, Shift+Klik = force refresh", handler: (e) => showYouTubeTranscript(data, { force: !!e?.shiftKey }), keep: true },
     { icon: "🎬", label: "Film/seriál → přidat na ČSFD watchlist", handler: () => youtubeToWatchlist(data) },
     { icon: "📚", label: "Naučné → ingest do wiki", handler: () => ingestYouTube(data) },
     { icon: "⏭", label: "Přeskoč", handler: () => {} },
@@ -351,12 +552,13 @@ async function offerYouTube(fallbackTitle, url) {
   for (const a of actions) {
     const btn = document.createElement("button");
     btn.textContent = `${a.icon}  ${a.label}`;
+    if (a.title) btn.title = a.title;
     btn.style.cssText = "padding: 6px 10px; border: 1px solid var(--text-muted); border-radius: 5px; background: var(--bg-card); color: var(--text); font-size: 12px; cursor: pointer; text-align: left; font-family: var(--sans);";
     btn.addEventListener("mouseenter", () => { btn.style.borderColor = "var(--green)"; btn.style.color = "var(--green)"; });
     btn.addEventListener("mouseleave", () => { btn.style.borderColor = "var(--text-muted)"; btn.style.color = "var(--text)"; });
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", (e) => {
       if (!a.keep) btnCol.remove();
-      a.handler();
+      a.handler(e);
     });
     btnCol.appendChild(btn);
   }
@@ -374,8 +576,9 @@ function youtubeMetaBlock(data) {
   );
 }
 
-async function fetchYouTubeTranscript(videoId) {
-  const res = await fetch(`${BRIDGE_URL}/youtube/transcript?videoId=${encodeURIComponent(videoId)}`);
+async function fetchYouTubeTranscript(videoId, { force = false } = {}) {
+  const qs = `videoId=${encodeURIComponent(videoId)}${force ? "&force=1" : ""}`;
+  const res = await fetch(`${BRIDGE_URL}/youtube/transcript?${qs}`);
   const payload = await res.json().catch(() => ({ error: "Neplatná odpověď bridge" }));
   if (!res.ok || payload.error) throw new Error(payload.error || `HTTP ${res.status}`);
   return payload; // { transcript, language, length }
@@ -396,12 +599,12 @@ function prettifyTranscript(text) {
   return chunks.join("\n");
 }
 
-async function showYouTubeTranscript(data) {
-  addMessage("user", `📄 Ukaž transcript`);
-  const placeholderId = addMessage("pekacek", "Stahuji transcript…", true);
+async function showYouTubeTranscript(data, { force = false } = {}) {
+  addMessage("user", force ? `📄 Ukaž transcript (force refresh)` : `📄 Ukaž transcript`);
+  const placeholderId = addMessage("pekacek", force ? "Stahuji transcript znovu (bez cache)…" : "Stahuji transcript…", true);
 
   try {
-    const t = await fetchYouTubeTranscript(data.videoId);
+    const t = await fetchYouTubeTranscript(data.videoId, { force });
     removeMessage(placeholderId);
 
     const lenKb = (t.length / 1000).toFixed(1);
@@ -581,6 +784,18 @@ document.addEventListener("visibilitychange", () => {
     // User is looking at sidebar again — clear badge
     try { chrome.runtime.sendMessage({ type: "clear-badge" }, () => {}); } catch {}
   }
+});
+
+// Listen for tab URL changes (SPA navigations fire chrome.tabs.onUpdated in background).
+// Reset page-state so stale YT offer doesn't linger with wrong videoId.
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg?.type !== "tab-url-changed") return;
+  const newUrl = msg.url || "";
+  if (!newUrl || newUrl === lastReadUrl) return;
+  currentPageContent = null;
+  articleRead = false;
+  lastReadUrl = null;
+  loadTabInfo();
 });
 
 // --- Dropdown toggles ---
@@ -1219,6 +1434,7 @@ async function sendToBridge(prompt, extra = {}) {
       body: JSON.stringify({
         prompt,
         pageUrl: currentPageContent?.url || null,
+        claudeSessionId: currentSession?.claudeSessionId || null,
         ...extra,
       }),
       signal: abortCtrl.signal,
@@ -1254,11 +1470,18 @@ async function sendToBridge(prompt, extra = {}) {
 
           if (event.type === "session-start") {
             currentStreamId = event.reqId;
+          } else if (event.type === "claude-session") {
+            // Bridge captured Claude's session_id — persist for future --resume
+            if (currentSession && event.sessionId) {
+              currentSession.claudeSessionId = event.sessionId;
+              persistCurrentSession();
+            }
           } else if (event.type === "stopped") {
             wasStopped = true;
             const stoppedText = (fullText || "") + "\n\n_(přerušeno)_";
             contentEl.innerHTML = formatMessage(stoppedText);
             msgEl.dataset.rawText = stoppedText;
+            recordMessage("pekacek", stoppedText);
           } else if (event.type === "token") {
             // First token: stop thinking rotation, switch to "reading" mode
             if (!fullText) {
@@ -1290,6 +1513,7 @@ async function sendToBridge(prompt, extra = {}) {
             const errText = `Chyba: ${event.error}`;
             contentEl.innerHTML = formatMessage(errText);
             msgEl.dataset.rawText = errText;
+            recordMessage("pekacek", errText);
             tempFace("worried", "animate-error");
             statusText.textContent = "Chyba";
             statusText.style.color = "#e94560";
@@ -1309,6 +1533,7 @@ async function sendToBridge(prompt, extra = {}) {
     if (!wasStopped && fullText) {
       contentEl.innerHTML = formatMessage(fullText);
       scrollToBottom();
+      recordMessage("pekacek", fullText);
     }
 
     isWorking = false;
@@ -1347,6 +1572,7 @@ async function sendToBridge(prompt, extra = {}) {
       const stoppedText = (fullText || "") + "\n\n_(přerušeno)_";
       contentEl.innerHTML = formatMessage(stoppedText);
       msgEl.dataset.rawText = stoppedText;
+      recordMessage("pekacek", stoppedText);
       tempFace("chill", "animate-idle", 1500);
       statusText.textContent = "Přerušeno";
       statusText.style.color = "#ffd369";
@@ -1388,10 +1614,11 @@ function addMessage(role, content, isLoading = false) {
 
   div.appendChild(contentDiv);
 
+  // Store raw text on the element (for persistence + clipboard). Updated during streaming.
+  div.dataset.rawText = isLoading ? "" : content;
+
   // Copy + Pin buttons for Pekáček messages (not for loading state or user)
   if (role === "pekacek") {
-    // Store raw text for clipboard (updated during streaming)
-    div.dataset.rawText = isLoading ? "" : content;
 
     const copyBtn = document.createElement("button");
     copyBtn.className = "copy-btn";
@@ -1429,6 +1656,10 @@ function addMessage(role, content, isLoading = false) {
 
   messagesEl.appendChild(div);
   scrollToBottom(role === "user");
+
+  // Persist finalized messages (not streaming placeholders, not during restore)
+  if (!isLoading) recordMessage(role, content);
+
   return id;
 }
 
