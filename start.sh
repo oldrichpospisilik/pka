@@ -225,6 +225,46 @@ fi
 
 echo ""
 
+# --- Pekáček uvítací tvář (time-based) ---
+hour=$(date +%H)
+hour=${hour#0}
+if [ "$hour" -ge 5 ] && [ "$hour" -lt 11 ]; then
+    greeting="Dobré ráno, Oldo. Co dnes?"
+    face=$(cat <<'EOF'
+  ( o_o) ☕
+  /|___|\
+   / \
+EOF
+)
+elif [ "$hour" -ge 11 ] && [ "$hour" -lt 18 ]; then
+    greeting="Nazdar Oldo, jdem na to."
+    face=$(cat <<'EOF'
+  ( o_o)/
+  /|___|
+   / \
+EOF
+)
+elif [ "$hour" -ge 18 ] && [ "$hour" -lt 23 ]; then
+    greeting="Dobrý večer. Co ještě stihneme?"
+    face=$(cat <<'EOF'
+  ( -_-)
+  /|___|\
+   / \
+EOF
+)
+else
+    greeting="Hele, je noc. Neber to moc vážně."
+    face="(´･ω･\`) zzz"
+fi
+
+TURQ='\033[38;2;78;204;163m'
+echo -e "${TURQ}${face}${NC}"
+echo -e "   ${TURQ}${greeting}${NC}"
+echo ""
+
+# --- Terminal title (Windows Terminal / xterm) ---
+printf '\033]0;🍞 Pekáček — %s\007' "$(basename "$PKA_DIR")"
+
 # --- Start Claude Code ---
 cd "$PKA_DIR"
 
