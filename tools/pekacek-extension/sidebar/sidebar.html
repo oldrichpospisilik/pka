@@ -74,6 +74,19 @@
   <div id="status-bar">
     <span id="status-text">Připraveny</span>
     <span id="page-indicator"></span>
+    <div id="mcp-status" class="mcp-status">
+      <button id="mcp-dot-btn" type="button" aria-label="MCP status" title="Bookmarks MCP">
+        <span id="mcp-dot" class="dot"></span>
+        <span class="mcp-label">MCP</span>
+      </button>
+      <div id="mcp-popover" class="mcp-popover hidden">
+        <div class="mcp-popover-head">Bookmarks MCP</div>
+        <div class="mcp-popover-row"><span>Server (:3777)</span><span id="mcp-state">—</span></div>
+        <div class="mcp-popover-row"><span>Extension long-poll</span><span id="mcp-ext">—</span></div>
+        <div class="mcp-popover-row"><span>Čeká příkaz</span><span id="mcp-pending">—</span></div>
+        <button id="mcp-reconnect" type="button">↻ Reconnect</button>
+      </div>
+    </div>
     <button id="stop-btn" title="Zastavit generování (Esc)" style="display:none;">⏹ Stop</button>
   </div>
 

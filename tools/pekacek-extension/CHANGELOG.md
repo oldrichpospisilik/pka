@@ -5,6 +5,12 @@ Semver: `MAJOR.MINOR.PATCH`.
 - **MINOR** — nové feature, zpětně kompatibilní
 - **PATCH** — bugfixy, drobné úpravy
 
+## 2.11.0 — 2026-04-24
+
+### Nové
+- **Bookmarks MCP status v sidebaru.** Ve status-baru přibyla malá tečka + popisek „MCP" (pro Chrome bookmarks MCP na `:3777`). Barva signalizuje stav: zelená = server běží a extension long-polluje, žlutá = server běží ale extension ještě nepolluje, červená = server offline. Klik otevře popover s podrobnostmi (server, extension, pending příkaz) a tlačítkem **↻ Reconnect**, které resetuje long-poll cyklus v service workeru (force `bookmarksPolling = false` → `bookmarksLongPoll()`). Status se obnovuje každých 5 s.
+- Obnoven MCP server `tools/chrome-bookmarks-mcp/` z historie (byl odstraněn při unifikaci extension v `64b6b08`). Extension long-poll kód v `background.js` zůstal celou dobu — server byl jediná chybějící strana. Přidáno do `.mcp.json` a do `start.sh` checklistu (kontrola skriptu, deps, Chrome bookmarks souboru).
+
 ## 2.10.1 — 2026-04-23
 
 ### Opravy

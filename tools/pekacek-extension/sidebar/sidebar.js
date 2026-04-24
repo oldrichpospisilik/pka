@@ -332,6 +332,68 @@ function checkBridgeStatus() {
   });
 }
 
+// --- Bookmarks MCP status (port 3777) ---
+const MCP_URL = "http://localhost:3777";
+const mcpStatusEl = document.getElementById("mcp-status");
+const mcpDotBtn = document.getElementById("mcp-dot-btn");
+const mcpPopover = document.getElementById("mcp-popover");
+const mcpStateEl = document.getElementById("mcp-state");
+const mcpExtEl = document.getElementById("mcp-ext");
+const mcpPendingEl = document.getElementById("mcp-pending");
+const mcpReconnectBtn = document.getElementById("mcp-reconnect");
+
+async function checkMcpStatus() {
+  try {
+    const r = await fetch(`${MCP_URL}/status`, { cache: "no-store" });
+    const data = await r.json();
+    const running = true;
+    const extConnected = !!data.extensionConnected;
+    mcpStatusEl.classList.remove("offline");
+    mcpStatusEl.classList.toggle("running", running && extConnected);
+    mcpStatusEl.classList.toggle("partial", running && !extConnected);
+    mcpStateEl.textContent = "běží";
+    mcpExtEl.textContent = extConnected ? "připojena" : "čeká na extension";
+    mcpPendingEl.textContent = data.hasPending ? "ano" : "ne";
+    mcpDotBtn.title = extConnected
+      ? "Bookmarks MCP — běží, extension připojena"
+      : "Bookmarks MCP — server běží, ale extension nepolluje";
+  } catch {
+    mcpStatusEl.classList.remove("running", "partial");
+    mcpStatusEl.classList.add("offline");
+    mcpStateEl.textContent = "offline";
+    mcpExtEl.textContent = "—";
+    mcpPendingEl.textContent = "—";
+    mcpDotBtn.title = "Bookmarks MCP offline — spusť ./start.sh v ~/pka";
+  }
+}
+
+mcpDotBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const willOpen = mcpPopover.classList.contains("hidden");
+  mcpPopover.classList.toggle("hidden");
+  if (willOpen) checkMcpStatus();
+});
+
+document.addEventListener("click", (e) => {
+  if (!mcpStatusEl.contains(e.target)) mcpPopover.classList.add("hidden");
+});
+
+mcpReconnectBtn.addEventListener("click", async () => {
+  mcpReconnectBtn.disabled = true;
+  const original = mcpReconnectBtn.textContent;
+  mcpReconnectBtn.textContent = "↻ Reconnecting…";
+  try {
+    await chrome.runtime.sendMessage({ type: "reconnect-bookmarks-mcp" });
+  } catch {}
+  await new Promise((r) => setTimeout(r, 600));
+  await checkMcpStatus();
+  mcpReconnectBtn.textContent = original;
+  mcpReconnectBtn.disabled = false;
+});
+
+checkMcpStatus();
+setInterval(checkMcpStatus, 5000);
+
 // --- Pekacek Face ---
 let idleTimer = null;
 let isWorking = false;

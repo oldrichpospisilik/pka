@@ -108,9 +108,27 @@ fi
 
 # --- 6. MCP config ---
 if [ -f "$PKA_DIR/.mcp.json" ]; then
-    ok ".mcp.json existuje (ČSFD MCP)"
+    ok ".mcp.json existuje (ČSFD MCP, Chrome bookmarks MCP)"
 else
-    warn ".mcp.json chybí — ČSFD MCP nebude dostupný"
+    warn ".mcp.json chybí — MCP servery nebudou dostupné"
+fi
+
+# --- 6b. Chrome bookmarks MCP ---
+BOOKMARKS_MCP="$PKA_DIR/tools/chrome-bookmarks-mcp"
+CHROME_BOOKMARKS="/mnt/c/Users/oposp/AppData/Local/Google/Chrome/User Data/Default/Bookmarks"
+if [ -f "$BOOKMARKS_MCP/mcp-server.js" ]; then
+    if [ -d "$BOOKMARKS_MCP/node_modules/@modelcontextprotocol" ]; then
+        ok "Chrome bookmarks MCP server připravený"
+    else
+        warn "Chrome bookmarks MCP — chybí deps, spusť: (cd $BOOKMARKS_MCP && npm install)"
+    fi
+    if [ -f "$CHROME_BOOKMARKS" ]; then
+        ok "Chrome bookmarks soubor dostupný"
+    else
+        warn "Chrome bookmarks soubor nenalezen ($CHROME_BOOKMARKS)"
+    fi
+else
+    warn "Chrome bookmarks MCP server nenalezen ($BOOKMARKS_MCP/mcp-server.js)"
 fi
 
 # --- 7. Wiki obsah ---

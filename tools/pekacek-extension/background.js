@@ -174,6 +174,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
+  if (msg.type === "reconnect-bookmarks-mcp") {
+    // Force-reset polling flag and kick off a fresh long-poll cycle.
+    bookmarksPolling = false;
+    bookmarksLongPoll();
+    sendResponse({ ok: true });
+    return;
+  }
+
   if (msg.type === "save-to-raw") {
     saveToRawBookmarks(msg.url, msg.title).then(sendResponse);
     return true;

@@ -480,8 +480,106 @@ body {
   white-space: nowrap;
 }
 
-#stop-btn {
+/* --- MCP status (Bookmarks MCP) --- */
+.mcp-status {
+  position: relative;
   margin-left: auto;
+}
+#mcp-dot-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-family: var(--sans);
+  letter-spacing: 0.4px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+#mcp-dot-btn:hover {
+  background: var(--bg-card);
+}
+.mcp-status .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  display: inline-block;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.mcp-status.running .dot {
+  background: var(--green);
+  box-shadow: 0 0 4px var(--green);
+}
+.mcp-status.partial .dot {
+  background: #ffd369;
+}
+.mcp-status.offline .dot {
+  background: var(--accent);
+}
+
+.mcp-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  width: 230px;
+  background: var(--bg-card);
+  border: 1px solid var(--text-muted);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 11px;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  font-family: var(--sans);
+}
+.mcp-popover.hidden {
+  display: none;
+}
+.mcp-popover-head {
+  font-weight: 600;
+  color: var(--text);
+  padding-bottom: 5px;
+  margin-bottom: 5px;
+  border-bottom: 1px solid var(--text-muted);
+}
+.mcp-popover-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+  color: var(--text-dim);
+}
+.mcp-popover-row span:last-child {
+  color: var(--text);
+}
+#mcp-reconnect {
+  margin-top: 7px;
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--text-muted);
+  border-radius: 4px;
+  color: var(--text-dim);
+  padding: 4px;
+  cursor: pointer;
+  font-size: 10px;
+  font-family: var(--sans);
+  transition: all 0.15s;
+}
+#mcp-reconnect:hover {
+  border-color: var(--green);
+  color: var(--green);
+}
+#mcp-reconnect:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+#stop-btn {
+  margin-left: 6px;
   padding: 2px 8px;
   border: 1px solid var(--accent);
   border-radius: 6px;
