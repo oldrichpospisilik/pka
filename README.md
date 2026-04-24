@@ -104,17 +104,33 @@ Definované v `.mcp.json`, Claude Code je načte při startu.
 | Server | Tooly | Účel |
 |---|---|---|
 | **csfd** | `search`, `get_movie`, `get_creator`, `get_user_ratings`, `get_user_reviews`, `get_cinemas` | Čtení dat z ČSFD (read-only) |
+| **chrome-bookmarks** | `list_bookmarks`, `search_bookmarks`, `find_duplicates`, `move_bookmark`, `create_bookmark`, `create_folder`, `delete_bookmark`, `update_bookmark` | Správa Chrome záložek přes Pekáček extension (long-poll bridge `:3777`). Vyžaduje běžící Chrome s nahranou extensionou. |
+
+Pokud jsou v Claude.ai zapnuté connectory (Gmail, Google Calendar, Notion, Slack, Google Drive), Claude je uvidí taky — ale tenhle projekt je explicitně využívá jen pro **Gmail** (read, drafty) a **Google Calendar** (plné ovládání). Viz CLAUDE.md sekci "Co umím".
+
+## Pekáček Chrome extension
+
+V `tools/pekacek-extension/` je Chrome extension (Manifest V3) s vlastním sidebarem. Bridge (`tools/pekacek-extension/bridge.mjs`, port `:3888`) propojuje sidebar s Claude Code a umožňuje volat mě přímo z prohlížeče. Start.sh bridge spouští automaticky.
+
+Features v sidebaru:
+- **Souhrn** stránky / **protimyšlenky** / **Vysvětli ▾** (jako pětiletému / zjednodušeně / odborně / analogií / diagramem) / **Experimenty** z `lab/`
+- **Rychlé akce** (dashboard chip, pickery pro filmy, recepty, knihy, divadlo, články)
+- **Uložit ▾** — do `_raw` záložek nebo rovnou ingest do wiki
+- **YouTube** — transcript (yt-dlp), souhrn z transcriptu
+- **Persistentní historie** konverzací (max 30, auto-archivace, ↻ Reset zakládá novou)
+- **MCP status** — tečka v status-baru + popover se stavem `chrome-bookmarks` MCP a Reconnect tlačítkem
+
+Instalace extension: Chrome → `chrome://extensions` → Developer mode → Load unpacked → vyber `tools/pekacek-extension/`. Jakmile změním kód, reloadni extension (↻ v chrome://extensions).
 
 ## Raw zdroje pro wiki
 
-Dvě místa kam házíš raw vstupy pro ingest do wiki:
+Tři místa kam házíš raw vstupy pro ingest do wiki — Claude při ingestu zkontroluje všechna:
 
 | Odkud | Cesta | Typické použití |
 |---|---|---|
 | pCloud (telefon/browser) | `/mnt/p/Wiki/raw/` | Z telefonu, prohlížeče |
 | Obsidian Web Clipper | `/mnt/p/Wiki/Wiki/_raw/` | Automaticky z browser extension |
-
-Claude při ingestu zkontroluje obě místa.
+| Chrome záložky | `_raw` složka v Bookmarks | Záložky k roztřídění (přes `chrome-bookmarks` MCP) |
 
 ## Setup na novém stroji
 
