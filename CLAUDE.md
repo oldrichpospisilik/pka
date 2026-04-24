@@ -103,22 +103,28 @@ Existují **tři** raw zdroje — při ingestu kontroluj všechny:
 
 **Workflow pro `_raw/`:** Během ingestu projdi i tuto složku. Po zpracování **přesuň všechny soubory odtud do `/mnt/p/Wiki/raw/`** (aby zůstaly jako trvalý zdroj vedle ostatních raw) a celou složku `_raw` následně **smaž** (`rmdir`) — Web Clipper si ji při příštím uložení vytvoří znova.
 
-**Workflow pro Chrome `_raw`:** Během ingestu přečti Chrome Bookmarks soubor (`/mnt/c/Users/oposp/AppData/Local/Google/Chrome/User Data/Default/Bookmarks`), najdi složku `_raw` podle jména a projdi všechny záložky. Pro každou urči typ podle URL a routuj:
+**Workflow pro Chrome `_raw`:** Během ingestu projdi i tuto složku přes MCP server `chrome-bookmarks` (`.mcp.json`, běží na :3777 + long-poll do pekáček extension). Pro listing a search používej `mcp__chrome-bookmarks__list_bookmarks` / `search_bookmarks`; pro zápis `move_bookmark`, `delete_bookmark`, `create_folder`, `create_bookmark`, `update_bookmark`.
 
-- **ČSFD odkaz** (`csfd.cz/film/`) → `node csfd-rate.mjs watchlist-add <url>`, po úspěchu smaž záložku.
-- **Článek / blog** (běžné URL) → `WebFetch` obsah, vytvoř stránku v `clanky/` (template s `status: chci-precist`), smaž záložku.
-- **YouTube video** (`youtube.com/watch`, `youtu.be/`) → `WebFetch` pro metadata (název, kanál), pak rozhodni:
-  - Film/seriál ke zhlédnutí → `csfd-rate.mjs watchlist-add` (ne wiki)
-  - Vzdělávací obsah → wiki stránka v příslušné kategorii
-  - Hudba / meme / zábava → přeskoč, označ `[skip]` v názvu záložky
-  - Nejasné → zeptej se uživatele
-- **E-shop / produkt** → `nakupy/`
-- **Recept** → `recepty/`
-- **Ostatní** → `WebFetch`, vyhodnoť, routuj do wiki. Pokud není jasné kam → zeptej se.
+Pro každou záložku v `_raw` rozhodni:
 
-**Mazání z `_raw`:** Každou zpracovanou záložku smaž z Chrome Bookmarks JSON souboru (Python skript, viz vzor z batch operací). Složku `_raw` samotnou **nech** — uživatel do ní přidává průběžně.
+**A) Ingest do wiki** (znalost k zachycení) — pokud je to článek, blog, naučný YouTube, zajímavá myšlenka apod.:
+- **ČSFD odkaz** (`csfd.cz/film/`) → `node csfd-rate.mjs watchlist-add <url>`, pak `delete_bookmark`.
+- **Článek / blog** → `WebFetch`, stránka v `clanky/` (frontmatter `status: chci-precist`), pak `delete_bookmark`.
+- **YouTube** → `WebFetch` metadata:
+  - Film/seriál → `csfd-rate.mjs watchlist-add`, pak `delete_bookmark`.
+  - Vzdělávací → wiki stránka, pak `delete_bookmark`.
+  - Hudba / meme / zábava → `update_bookmark` s prefixem `[skip]`, nebo smaž.
+- **Recept** → stránka v `recepty/`, pak `delete_bookmark`.
 
-**Tip:** Bookmarks soubor se čte/zapisuje přímo (není potřeba MCP). Po zápisu Chrome změny načte při příštím restartu nebo refreshi.
+**B) Zařazení do správné Chrome složky** (utilitární wishlist / reference, nemá smysl mít wiki stránku) — používej `move_bookmark` s parentId cílové podsložky:
+- **Nákupy** (id `945`) má podsložky: `Fitness` (966), `Kuchyně & jídlo` (967), `Rostliny & květináče` (968), `Kosmetika & doplňky` (969), `Foto / Audio / Elektro` (970), `Plakáty (astro)` (971), `Oblečení` (972), `Hudba & lístky` (973), `Bydlení / řemesla` (974), `Hračky (PIXIO)` (975), `Ostatní` (976). Pokud přijde e-shop položka nespadající nikam, založ novou podsložku přes `create_folder` místo házení do `Ostatní`.
+- **Tematické mimo Nákupy**: `Astronomie` (378), `AI/Tech` (950), `Cooking` (335), `Audioknihy` (948), `Games` (370), `Blogs` (161), `Travelling` (18), `Práce` (955). (IDs se mohou časem změnit — ověř přes `list_bookmarks`.)
+
+**C) Nejasné** — zeptej se uživatele. Ne všechno musí skončit hned; záložka může v `_raw` zůstat do další session.
+
+**Pravidlo:** složku `_raw` samotnou **nikdy nesmaž** — uživatel do ní přidává průběžně. Maž jen její obsah.
+
+**Fallback** (když MCP nejede — extension vypnutá, Chrome zavřený): Bookmarks JSON (`/mnt/c/Users/oposp/AppData/Local/Google/Chrome/User Data/Default/Bookmarks`) jde číst/přepisovat i přímo přes Python, ale **vyžaduje aby Chrome byl zavřený**, jinak si soubor při dalším flushi přepíše a změny přijdou nazmar. Preferuj MCP kdykoliv to jde.
 
 ```
 wiki/                   ← zpracované stránky udržované Claudem
