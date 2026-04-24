@@ -6,7 +6,7 @@ import path from "path";
 import { z } from "zod";
 
 // --- Config ---
-const PORT = 3777;
+const PORT = Number(process.env.CHROME_BRIDGE_PORT) || 3777;
 const BOOKMARKS_PATH =
   "/mnt/c/Users/oposp/AppData/Local/Google/Chrome/User Data/Default/Bookmarks";
 const EXTENSION_TIMEOUT = 30_000;
@@ -393,6 +393,232 @@ server.tool(
       action: "update",
       bookmarkId,
       ...changes,
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+);
+
+// --- Tabs: inspection ---
+
+server.tool(
+  "list_tabs",
+  "List all open Chrome tabs across all windows (id, url, title, active, windowId, favicon)",
+  {},
+  async () => {
+    const result = await sendToExtension({ action: "listTabs" });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+);
+
+server.tool(
+  "get_active_tab",
+  "Get the currently active tab in the focused window (shortcut for filtering list_tabs)",
+  {},
+  async () => {
+    const result = await sendToExtension({ action: "getActiveTab" });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+);
+
+server.tool(
+  "screenshot_active_tab",
+  "Capture viewport-only PNG screenshot of the active tab. Returns as image content (I see it directly).",
+  {},
+  async () => {
+    const result = await sendToExtension({ action: "screenshotActive" });
+    if (result.error) {
+      return { content: [{ type: "text", text: `Error: ${result.error}` }] };
+    }
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Screenshot of tab ${result.tabId}: ${result.title}\n${result.url}`,
+        },
+        { type: "image", data: result.dataBase64, mimeType: "image/png" },
+      ],
+    };
+  }
+);
+
+// --- DOM: read ---
+
+server.tool(
+  "read_page_text",
+  "Extract readable text from a tab's page. Uses the existing Pekacek content script (handles YouTube, article cleanup). Default: active tab.",
+  { tabId: z.number().optional().describe("Tab ID (default: active tab)") },
+  async ({ tabId }) => {
+    const result = await sendToExtension({ action: "readPageText", tabId });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+);
+
+server.tool(
+  "read_page_html",
+  "Get raw outerHTML of a tab's page (capped at 500KB). Default: active tab.",
+  { tabId: z.number().optional() },
+  async ({ tabId }) => {
+    const result = await sendToExtension({ action: "readPageHtml", tabId });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+);
+
+server.tool(
+  "query_selector",
+  "Query elements matching a CSS selector. Returns tag/text/attrs/rect/visibility for up to `limit` elements. Useful for debugging selectors before clicking.",
+  {
+    selector: z.string().describe("CSS selector"),
+    tabId: z.number().optional(),
+    limit: z.number().optional().describe("Max results (default 20)"),
+  },
+  async ({ selector, tabId, limit }) => {
+    const result = await sendToExtension({
+      action: "querySelector",
+      selector,
+      tabId,
+      limit: limit || 20,
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+);
+
+// --- Tabs: navigation ---
+
+server.tool(
+  "navigate_tab",
+  "Navigate an existing tab to a new URL. Default: active tab.",
+  {
+    url: z.string().describe("Target URL"),
+    tabId: z.number().optional(),
+  },
+  async ({ url, tabId }) => {
+    const result = await sendToExtension({ action: "navigate", url, tabId });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+);
+
+server.tool(
+  "open_tab",
+  "Open a new tab with given URL",
+  {
+    url: z.string().describe("URL to open"),
+    active: z.boolean().optional().describe("Focus the new tab (default true)"),
+  },
+  async ({ url, active }) => {
+    const result = await sendToExtension({
+      action: "openTab",
+      url,
+      active: active !== false,
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+);
+
+server.tool(
+  "focus_tab",
+  "Make a tab active and bring its window to the foreground",
+  { tabId: z.number().describe("Tab ID") },
+  async ({ tabId }) => {
+    const result = await sendToExtension({ action: "focusTab", tabId });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+);
+
+server.tool(
+  "close_tab",
+  "Close a tab",
+  { tabId: z.number().describe("Tab ID") },
+  async ({ tabId }) => {
+    const result = await sendToExtension({ action: "closeTab", tabId });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+);
+
+// --- DOM: actions ---
+
+server.tool(
+  "click_element",
+  "Click an element matching a CSS selector. Scrolls into view first. Fails if no match or if page CSP blocks script injection.",
+  {
+    selector: z.string().describe("CSS selector"),
+    tabId: z.number().optional(),
+  },
+  async ({ selector, tabId }) => {
+    const result = await sendToExtension({ action: "clickElement", selector, tabId });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+);
+
+server.tool(
+  "fill_input",
+  "Fill a text input/textarea with a value. Uses native setter + dispatches input/change events so React/Vue controlled inputs register the update.",
+  {
+    selector: z.string().describe("CSS selector for the input"),
+    value: z.string().describe("Value to set"),
+    tabId: z.number().optional(),
+  },
+  async ({ selector, value, tabId }) => {
+    const result = await sendToExtension({
+      action: "fillInput",
+      selector,
+      value,
+      tabId,
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+);
+
+server.tool(
+  "get_form_schema",
+  "Extract structured schema for all visible form fields in a page: label (resolved from <label for>, aria-label, aria-labelledby, parent label, or nearby text), type, selector, value, required, options (for selects). Prefer this over screenshot+query_selector when the goal is filling a form — one call gives everything needed.",
+  {
+    formSelector: z.string().optional().describe("CSS selector for form (default: first <form>)"),
+    tabId: z.number().optional(),
+  },
+  async ({ formSelector, tabId }) => {
+    const result = await sendToExtension({
+      action: "getFormSchema",
+      formSelector,
+      tabId,
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+);
+
+server.tool(
+  "fill_form",
+  "Fill multiple form fields in one roundtrip (10× faster than fill_input per field). Handles input/textarea/select via native setter + input/change events (React/Vue safe). Checkbox/radio via click. Returns per-field {selector, success, value|error}. Use get_form_schema first to discover selectors & labels.",
+  {
+    fields: z
+      .array(
+        z.object({
+          selector: z.string().describe("CSS selector for the field"),
+          value: z.union([z.string(), z.number(), z.boolean()]).describe("Value to set"),
+        })
+      )
+      .describe("Array of fields to fill"),
+    tabId: z.number().optional(),
+  },
+  async ({ fields, tabId }) => {
+    const result = await sendToExtension({ action: "fillForm", fields, tabId });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+);
+
+server.tool(
+  "wait_for_selector",
+  "Poll a tab until a CSS selector matches an element or timeout expires. Returns elapsed time on success.",
+  {
+    selector: z.string().describe("CSS selector"),
+    timeoutMs: z.number().optional().describe("Max wait in ms (default 5000)"),
+    tabId: z.number().optional(),
+  },
+  async ({ selector, timeoutMs, tabId }) => {
+    const result = await sendToExtension({
+      action: "waitForSelector",
+      selector,
+      timeoutMs: timeoutMs || 5000,
+      tabId,
     });
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }

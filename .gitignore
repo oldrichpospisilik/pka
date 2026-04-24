@@ -29,3 +29,6 @@ Bookmarks.backup.*
 # ČSFD tool state (cookies + cache — citlivé)
 .csfd-state.json
 .csfd-watchlist-cache.json
+
+# Pekáček YouTube transcript cache (persistuje přes restarty bridge)
+.pekacek-transcript-cache.json

@@ -62,7 +62,44 @@ function getArticleStats() {
 // --- YouTube transcript (yt-dlp) ---
 const TRANSCRIPT_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const TRANSCRIPT_TIMEOUT_MS = 45_000;
+const TRANSCRIPT_CACHE_FILE = path.join(WORKING_DIR, ".pekacek-transcript-cache.json");
+const RATE_LIMIT_BACKOFF_MS = 30 * 60 * 1000; // 30 min cooldown after 429
 const transcriptCache = new Map(); // videoId -> { transcript, language, updatedAt }
+let rateLimitUntil = 0; // epoch ms; skip yt-dlp until past this
+
+// Load persistent cache from disk (survives bridge restarts).
+function loadTranscriptCache() {
+  try {
+    if (!fs.existsSync(TRANSCRIPT_CACHE_FILE)) return;
+    const raw = fs.readFileSync(TRANSCRIPT_CACHE_FILE, "utf8");
+    const obj = JSON.parse(raw);
+    const now = Date.now();
+    let loaded = 0, pruned = 0;
+    for (const [videoId, entry] of Object.entries(obj)) {
+      if (entry && entry.updatedAt && now - entry.updatedAt < TRANSCRIPT_TTL_MS) {
+        transcriptCache.set(videoId, entry);
+        loaded++;
+      } else {
+        pruned++;
+      }
+    }
+    process.stderr.write(`[bridge] Transcript cache loaded: ${loaded} entries (${pruned} expired)\n`);
+  } catch (err) {
+    process.stderr.write(`[bridge] Transcript cache load failed: ${err.message}\n`);
+  }
+}
+
+// Persist cache to disk (called after each successful fetch).
+function saveTranscriptCache() {
+  try {
+    const obj = Object.fromEntries(transcriptCache);
+    fs.writeFileSync(TRANSCRIPT_CACHE_FILE, JSON.stringify(obj), "utf8");
+  } catch (err) {
+    process.stderr.write(`[bridge] Transcript cache save failed: ${err.message}\n`);
+  }
+}
+
+loadTranscriptCache();
 
 function parseVTT(raw) {
   const lines = raw.split(/\r?\n/);
@@ -88,6 +125,7 @@ function parseVTT(raw) {
 }
 
 async function fetchYouTubeTranscript(videoId, { force = false } = {}) {
+  // Cache first (also under rate limit — stale cache is better than nothing)
   if (!force) {
     const cached = transcriptCache.get(videoId);
     if (cached && Date.now() - cached.updatedAt < TRANSCRIPT_TTL_MS) {
@@ -97,6 +135,14 @@ async function fetchYouTubeTranscript(videoId, { force = false } = {}) {
   } else {
     transcriptCache.delete(videoId);
     process.stderr.write(`[bridge] YT transcript ${videoId} (force refresh — cache busted)\n`);
+  }
+
+  // Bail early if we're in YouTube's rate-limit penalty window.
+  if (Date.now() < rateLimitUntil) {
+    const mins = Math.ceil((rateLimitUntil - Date.now()) / 60_000);
+    throw new Error(
+      `YouTube rate limit aktivní (429) — čekám ještě ~${mins} min. Další transcripty nebudou spouštět yt-dlp, aby se to neprodlužovalo.`
+    );
   }
 
   const tmpdir = fs.mkdtempSync(path.join(os.tmpdir(), `yt-${videoId}-`));
@@ -115,7 +161,17 @@ async function fetchYouTubeTranscript(videoId, { force = false } = {}) {
 
       let stderr = "";
       proc.stderr.on("data", (c) => (stderr += c));
-      proc.on("close", (code) => code === 0 ? resolve() : reject(new Error((stderr || `yt-dlp exit ${code}`).slice(0, 500))));
+      proc.on("close", (code) => {
+        if (code === 0) return resolve();
+        // Detect HTTP 429 in yt-dlp stderr and set cooldown
+        if (/HTTP Error 429|Too Many Requests/i.test(stderr)) {
+          rateLimitUntil = Date.now() + RATE_LIMIT_BACKOFF_MS;
+          const until = new Date(rateLimitUntil).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
+          process.stderr.write(`[bridge] YT rate limit detected — backoff until ${until}\n`);
+          return reject(new Error(`YouTube rate limit (HTTP 429). Pozastavuji yt-dlp do ${until}. Zkus později.`));
+        }
+        reject(new Error((stderr || `yt-dlp exit ${code}`).slice(0, 500)));
+      });
       proc.on("error", (err) => reject(new Error(`Nelze spustit yt-dlp: ${err.message}`)));
     });
 
@@ -143,6 +199,7 @@ async function fetchYouTubeTranscript(videoId, { force = false } = {}) {
       updatedAt: Date.now(),
     };
     transcriptCache.set(videoId, result);
+    saveTranscriptCache();
     process.stderr.write(`[bridge] YT transcript ${videoId} (fresh, ${lang}): ${transcript.length} znaků\n`);
     return result;
   } finally {
@@ -398,7 +455,7 @@ const server = http.createServer(async (req, res) => {
           "-p", prompt,
           "--permission-mode", "acceptEdits",
           "--add-dir", "/mnt/p/Wiki/Wiki",
-          "--allowedTools", "Bash(node csfd-rate.mjs *) Bash(node tools/*) Bash(grep *) Bash(rg *) Bash(ls *) Bash(find *) mcp__csfd__search mcp__csfd__get_movie mcp__csfd__get_creator mcp__csfd__get_user_ratings",
+          "--allowedTools", "Bash(node csfd-rate.mjs *) Bash(node tools/*) Bash(grep *) Bash(rg *) Bash(ls *) Bash(find *) mcp__csfd__search mcp__csfd__get_movie mcp__csfd__get_creator mcp__csfd__get_user_ratings mcp__chrome-bookmarks__list_tabs mcp__chrome-bookmarks__get_active_tab mcp__chrome-bookmarks__screenshot_active_tab mcp__chrome-bookmarks__read_page_text mcp__chrome-bookmarks__read_page_html mcp__chrome-bookmarks__query_selector mcp__chrome-bookmarks__get_form_schema mcp__chrome-bookmarks__list_bookmarks mcp__chrome-bookmarks__search_bookmarks mcp__chrome-bookmarks__find_duplicates",
           "--output-format", "stream-json",
           "--verbose",
           "--include-partial-messages",
