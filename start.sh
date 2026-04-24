@@ -170,6 +170,14 @@ else
     ok "Claude permissions doplněny: $result"
 fi
 
+# --- 8b. yt-dlp (YouTube transcripty pro Pekáček extension) ---
+if command -v yt-dlp &>/dev/null; then
+    ok "yt-dlp $(yt-dlp --version 2>/dev/null)"
+else
+    warn "yt-dlp chybí — YouTube transcripty v Pekáček extension nebudou fungovat."
+    warn "  Instalace: sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && sudo chmod a+rx /usr/local/bin/yt-dlp"
+fi
+
 # --- 9. Disk space ---
 disk_usage=$(df -h / 2>/dev/null | awk 'NR==2 {print $5}' | tr -d '%')
 if [ -n "$disk_usage" ] && [ "$disk_usage" -gt 90 ]; then
