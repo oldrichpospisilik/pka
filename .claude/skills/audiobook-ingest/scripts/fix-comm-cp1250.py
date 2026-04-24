@@ -65,6 +65,7 @@ def fix_mp3(path: str) -> int:
                 new_texts.append(fixed)
             if any_change:
                 fr.text = new_texts
+                fr.encoding = 1  # UTF-16 with BOM — v2.3 safe for non-latin
     # COMM frames
     comms = id3.getall("COMM")
     new_comms = []
@@ -79,6 +80,7 @@ def fix_mp3(path: str) -> int:
             new_texts.append(fixed)
         if any_change:
             c.text = new_texts
+            c.encoding = 1  # UTF-16 with BOM — v2.3 safe for non-latin
         new_comms.append(c)
 
     if changed:
