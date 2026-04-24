@@ -5,6 +5,27 @@ Semver: `MAJOR.MINOR.PATCH`.
 - **MINOR** — nové feature, zpětně kompatibilní
 - **PATCH** — bugfixy, drobné úpravy
 
+## 2.12.0 — 2026-04-24
+
+### Nové
+- **Bonus animace na klik do obličeje.** Čtyři varianty, weighted random (favorite: "utíká za obraz a vrátí se s dárkem"):
+  - **Útěk & návrat s dárkem** (w=5) — 12 druhů dárků: ⚽ 🎈 🍕 🍎 🌻 ☕ 🐱 🍩 📖 🎸 🥐 🧸, plus malý showoff tanec po návratu
+  - **Žonglování s míčem** (w=2) — míč krouží kolem Pekáčka
+  - **Tanec** (w=2) — cyklování dancing frameů s hudebními notami ♪/♫
+  - **Vykukování zprava** (w=2) — 3× vykoukne a schová se, pak přiběhne
+- **Hlavička rezervuje fixní výšku** (`#pekacek-face min-height: 4.3em`) — přechody mezi 1/2/3-řádkovými obličeji už nedělají layout shift. Bonus animace mají pár px bufferu navíc.
+
+### Změny
+- **Rename**: `Pekáček — Reading Companion` → `Pekáček — osobní asistent`. Description updatován — už to dávno není jen reader (ingest, ČSFD, start-of-day, filmy/recepty/knihy pickery…).
+- **Title stránky se přesunul** ze status-baru do vlastního `#page-bar` řádku pod dashboard chipem (s 🌐 ikonou). Dřív se tísnil vedle MCP statusu.
+- **Thinking zprávy se přesunuly ze status-baru do chat loading message.** Rotující kontextový text ("Shrnuju...", "Hledám slabiny...", "Vytvářím stránku...") teď běží přímo v odpovědní bublině v chatu — tam, kam se uživatel dívá. Bublina je oživená: žlutá kurziva, pulse opacity, animované tečky. Horní status-bar se zjednodušil na connection state (Připraveny / Odpovídá / Hotovo / Bridge offline) + MCP + Stop.
+
+### Opravy
+- **Layout shift hlavičky eliminován.** Všechny 2-řádkové obličeje (idle, wave, coffee, reading) mají teď řádky paddované na stejnou cell-šířku (~11 cells), takže přechod mezi nimi parent nere-centruje blok a hlava se nehýbe doleva/doprava.
+- **Coffee ☕ zpět vedle hlavy** (sipping style), už ne pod tělem (jak vypadal po rozlití) — díky width normalizaci je to teď stabilní.
+- **Reading face**: kniha `📖` vedle hlavy (dřív byla `[📚]` nad hlavou ve 3-řádkovém provedení).
+- **`yt-dlp` povolen v project allowlist** (`.claude/settings.json`) — free-text požadavky na transcript z YT už nevyžadují permission modal.
+
 ## 2.11.0 — 2026-04-24
 
 ### Nové

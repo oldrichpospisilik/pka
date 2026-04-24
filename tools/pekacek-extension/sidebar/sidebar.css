@@ -194,8 +194,15 @@ body {
   line-height: 1.3;
   white-space: pre;
   color: var(--green);
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 4.3em; /* rezerva na 3 řádky + pár px buffer na žonglování s míčem */
+  cursor: pointer;
   transition: color 0.3s, transform 0.3s;
+}
+#pekacek-face:hover {
+  filter: brightness(1.25);
 }
 
 /* Idle animation — gentle breathing */
@@ -473,8 +480,25 @@ body {
   color: var(--green);
 }
 
+#page-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--bg);
+  border-bottom: 1px solid var(--text-muted);
+  font-family: var(--sans);
+}
+#page-bar .page-icon {
+  font-size: 11px;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
 #page-indicator {
-  max-width: 60%;
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -922,7 +946,12 @@ body {
   color: var(--yellow);
 }
 
-/* Loading dots */
+/* Loading dots + oživená thinking bublina */
+.loading-dots {
+  color: #ffd369;
+  animation: pulseGlow 1.6s ease-in-out infinite;
+  font-style: italic;
+}
 .loading-dots::after {
   content: "";
   animation: dots 1.5s steps(4, end) infinite;
@@ -933,6 +962,11 @@ body {
   25% { content: "."; }
   50% { content: ".."; }
   75% { content: "..."; }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 1; }
 }
 
 /* --- Input Area --- */

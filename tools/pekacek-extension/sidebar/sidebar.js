@@ -2,10 +2,13 @@
 // Komunikuje s Claude Code pres lokalni bridge (WSL)
 
 // --- Pekacek Faces ---
+// Řádky všech 2-řádkových obličejů jsou paddovány na stejnou šířku (~11 cells),
+// aby při přechodu idle ↔ wave ↔ coffee ↔ reading parent nere-centroval blok
+// a hlava nepoposkakovala doleva/doprava.
 const FACES = {
-  idle:       "  ( o_o)\n  /|___|\\",
-  wave:       "  ( o_o)/\n  /|___| ",
-  coffee:     "  ( o_o) ☕\n  /|___|\\",
+  idle:       "  ( o_o)   \n  /|___|\\  ",
+  wave:       "  ( o_o)/  \n  /|___|   ",
+  coffee:     "  ( o_o) ☕\n  /|___|\\  ",
   happy:      "\\(^o^)/",
   thinking:   "(￣ー￣) ...",
   curious:    "(☞ﾟヮﾟ)☞",
@@ -13,7 +16,7 @@ const FACES = {
   worried:    "(>_<)",
   chill:      "ʕ•ᴥ•ʔ",
   proud:      "\\(^o^)/",
-  reading:    "  [📚]\n (•‿•)\n /|_|\\",
+  reading:    " (•‿•) 📖  \n /|_|\\     ",
   dancing:    "  ♪┌(˘⌣˘)ʃ♪\n    /|_|\\\n   _/   \\_",
   determined: "(ง •̀_•́)ง",
   surprised:  "(°ロ°) !",
@@ -473,6 +476,164 @@ function stopIdleLife() {
     idleTimer = null;
   }
 }
+
+// --- Bonus click animations (klikni na obličej) ---
+let isPlayingBonus = false;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Sada "dárků", pro které Pekáček odběhne za okraj panelu
+const BONUS_GIFTS = [
+  "⚽", // balón
+  "🎈", // nafukovák
+  "🍕", // pizza
+  "🍎", // jablko
+  "🌻", // slunečnice
+  "☕", // kafe
+  "🐱", // kočka
+  "🍩", // donut
+  "📖", // knížka
+  "🎸", // kytara
+  "🥐", // croissant
+  "🧸", // plyšák
+];
+
+async function bonusRunAndReturn() {
+  const gift = BONUS_GIFTS[Math.floor(Math.random() * BONUS_GIFTS.length)];
+  stopIdleLife();
+  isWorking = true;
+  face.className = "";
+  face.style.transition = "transform 60ms linear, opacity 250ms ease";
+  for (let i = 1; i <= 10; i++) {
+    face.style.transform = `translateX(${i * 22}px)`;
+    await sleep(55);
+  }
+  face.style.opacity = "0";
+  await sleep(500);
+  face.textContent = `  ( o_o) ${gift}\n  /|___|\\  `;
+  face.style.opacity = "1";
+  for (let i = 10; i >= 0; i--) {
+    face.style.transform = `translateX(${i * 22}px)`;
+    await sleep(55);
+  }
+  const showoff = [
+    `  ( o_o) ${gift}\n  /|___|\\  `,
+    `  (^o^) ${gift}\n  /|___|\\  `,
+    `  ( o_o)  \n  /|___|\\ ${gift}`,
+    `  (^o^)  \n  /|___|\\ ${gift}`,
+  ];
+  for (let b = 0; b < 3; b++) {
+    for (const f of showoff) {
+      face.textContent = f;
+      await sleep(200);
+    }
+  }
+  face.style.transform = "";
+  face.style.transition = "";
+  face.textContent = FACES.idle;
+  face.className = "animate-idle";
+  isWorking = false;
+  startIdleLife();
+}
+
+async function bonusDance() {
+  stopIdleLife();
+  isWorking = true;
+  face.className = "";
+  const frames = [
+    "  ♪┌(˘⌣˘)ʃ♪\n    /|_|\\\n   _/   \\_",
+    "  ♪ʅ(˘⌣˘)┐♪\n    /|_|\\\n   \\_   _/",
+    "  ♫┌(˘⌣˘)ʃ♫\n    /|_|\\\n   _/   \\_",
+    "  ♫ʅ(˘⌣˘)┐♫\n    /|_|\\\n   \\_   _/",
+  ];
+  for (let i = 0; i < 12; i++) {
+    face.textContent = frames[i % frames.length];
+    await sleep(220);
+  }
+  face.textContent = FACES.idle;
+  face.className = "animate-idle";
+  isWorking = false;
+  startIdleLife();
+}
+
+async function bonusPeekFromRight() {
+  // Pekáček vykoukne zprava a schová se
+  stopIdleLife();
+  isWorking = true;
+  face.className = "";
+  face.style.transition = "transform 120ms ease-out";
+  face.style.transform = "translateX(260px)";
+  face.style.opacity = "0";
+  await sleep(200);
+  face.style.opacity = "1";
+  for (let i = 0; i < 3; i++) {
+    // vykoukne a schová se
+    face.textContent = "     (o_o )\n    /|___|\\";
+    face.style.transform = "translateX(80px)";
+    await sleep(450);
+    face.style.transform = "translateX(260px)";
+    await sleep(350);
+  }
+  // finální vběhnutí
+  face.style.transition = "transform 200ms ease-out";
+  face.style.transform = "translateX(0)";
+  await sleep(250);
+  face.style.transform = "";
+  face.style.transition = "";
+  face.textContent = FACES.idle;
+  face.className = "animate-idle";
+  isWorking = false;
+  startIdleLife();
+}
+
+async function bonusJuggle() {
+  stopIdleLife();
+  isWorking = true;
+  face.className = "";
+  const frames = [
+    "    ⚽\n  ( o_o)\n  /|___|\\",
+    "       ⚽\n  ( o_o)\n  /|___|\\",
+    "  ( o_o)   ⚽\n  /|___|\\",
+    "  ( o_o)\n  /|___|\\ ⚽",
+    "  ( o_o) ⚽\n  /|___|\\",
+    "       ⚽\n  ( o_o)\n  /|___|\\",
+  ];
+  for (let cycle = 0; cycle < 3; cycle++) {
+    for (const f of frames) {
+      face.textContent = f;
+      await sleep(140);
+    }
+  }
+  face.textContent = FACES.idle;
+  face.className = "animate-idle";
+  isWorking = false;
+  startIdleLife();
+}
+
+// Weighted pick — "run & return with gift" je nejzábavnější (user's favorite), dává se často
+const BONUS_ANIMATIONS = [
+  { fn: bonusRunAndReturn,  weight: 5 },
+  { fn: bonusJuggle,        weight: 2 },
+  { fn: bonusDance,         weight: 2 },
+  { fn: bonusPeekFromRight, weight: 2 },
+];
+
+function pickBonusAnimation() {
+  const total = BONUS_ANIMATIONS.reduce((s, a) => s + a.weight, 0);
+  let r = Math.random() * total;
+  for (const a of BONUS_ANIMATIONS) {
+    r -= a.weight;
+    if (r <= 0) return a.fn;
+  }
+  return BONUS_ANIMATIONS[0].fn;
+}
+
+face.addEventListener("click", () => {
+  if (isPlayingBonus || isWorking || currentStreamId) return;
+  isPlayingBonus = true;
+  pickBonusAnimation()().finally(() => {
+    isPlayingBonus = false;
+  });
+});
 
 // --- Tab Info (always works, no content script needed) ---
 function loadTabInfo(retryCount = 0) {
@@ -1437,20 +1598,31 @@ const THINKING_MESSAGES = {
 const THINKING_FACES = ["thinking", "curious", "determined", "thinking", "reading"];
 
 let thinkingRotation = null;
+let thinkingTargetEl = null; // loading message content el, kam se píší rotující zprávy
 
-function startThinkingMessages(action) {
+// Strip trailing dots — loading-dots CSS pseudo přidává tečky po animaci
+const stripDots = (s) => s.replace(/[.…]+$/, "");
+
+function startThinkingMessages(action, targetEl = null) {
   const msgs = THINKING_MESSAGES[action] || THINKING_MESSAGES.default;
   let idx = 0;
   let faceIdx = 0;
 
-  statusText.textContent = msgs[0];
-  statusText.style.color = "#ffd369";
+  thinkingTargetEl = targetEl;
 
-  // Rotate messages every 4-6 seconds, faces every 2.5s
+  const setText = (msg) => {
+    if (thinkingTargetEl && thinkingTargetEl.classList.contains("loading-dots")) {
+      thinkingTargetEl.textContent = stripDots(msg);
+    }
+  };
+
+  setText(msgs[0]);
+
+  // Rychlejší rotace zpráv (3.5s místo 4.5s) — v chatu je to čitelnější než v status baru
   thinkingRotation = setInterval(() => {
     idx = (idx + 1) % msgs.length;
-    statusText.textContent = msgs[idx];
-  }, 4500);
+    setText(msgs[idx]);
+  }, 3500);
 
   // Face cycling (separate interval, faster)
   const faceInterval = setInterval(() => {
@@ -1469,20 +1641,21 @@ function stopThinkingMessages() {
     clearInterval(thinkingRotation);
     thinkingRotation = null;
   }
+  thinkingTargetEl = null;
 }
 
 async function sendToBridge(prompt, extra = {}) {
   isWorking = true;
   stopIdleLife();
   setFace("thinking", "animate-thinking");
-  startThinkingMessages(extra.action);
   showStopBtn();
 
-  // Create empty message that we'll fill with streamed tokens
+  // Create empty loading message (s loading-dots animací + rotujícím thinking textem)
   const msgId = addMessage("pekacek", "", true);
   const msgEl = document.getElementById(msgId);
   const contentEl = msgEl.querySelector(".message-content");
-  contentEl.className = "message-content"; // remove loading-dots
+  // Nechávame loading-dots třídu — odstraní se až přijde první token.
+  startThinkingMessages(extra.action, contentEl);
   let fullText = "";
   let wasStopped = false;
 
@@ -1504,6 +1677,8 @@ async function sendToBridge(prompt, extra = {}) {
 
     if (!response.ok) {
       const err = await response.text();
+      stopThinkingMessages();
+      contentEl.classList.remove("loading-dots");
       contentEl.innerHTML = formatMessage(`Chyba: ${err}`);
       tempFace("worried", "animate-error");
       statusText.textContent = "Chyba";
@@ -1540,6 +1715,8 @@ async function sendToBridge(prompt, extra = {}) {
             }
           } else if (event.type === "stopped") {
             wasStopped = true;
+            stopThinkingMessages();
+            contentEl.classList.remove("loading-dots");
             const stoppedText = (fullText || "") + "\n\n_(přerušeno)_";
             contentEl.innerHTML = formatMessage(stoppedText);
             msgEl.dataset.rawText = stoppedText;
@@ -1548,7 +1725,9 @@ async function sendToBridge(prompt, extra = {}) {
             // First token: stop thinking rotation, switch to "reading" mode
             if (!fullText) {
               stopThinkingMessages();
-              statusText.textContent = "Odpovídá...";
+              contentEl.classList.remove("loading-dots");
+              contentEl.textContent = "";
+              statusText.textContent = "Odpovídá";
               statusText.style.color = "#4ecca3";
               setFace("reading", "animate-idle");
             }
@@ -1572,6 +1751,7 @@ async function sendToBridge(prompt, extra = {}) {
             statusText.style.color = "#ffd369";
           } else if (event.type === "error") {
             stopThinkingMessages();
+            contentEl.classList.remove("loading-dots");
             const errText = `Chyba: ${event.error}`;
             contentEl.innerHTML = formatMessage(errText);
             msgEl.dataset.rawText = errText;
