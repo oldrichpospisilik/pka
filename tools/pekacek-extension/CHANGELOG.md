@@ -5,6 +5,12 @@ Semver: `MAJOR.MINOR.PATCH`.
 - **MINOR** — nové feature, zpětně kompatibilní
 - **PATCH** — bugfixy, drobné úpravy
 
+## 2.17.2 — 2026-04-25
+
+### Bugfix
+- **`ttsErrorHint` rozeznává `Bridge 404` zvlášť od `Gemini TTS API 404`.** Dřív byl jen jeden pattern `/404/` který vždy navrhoval Cloud Console, ale `Bridge 404` znamená že **bridge běží stará verze** bez `/tts` endpointu (potřebuje restart), zatímco `Gemini TTS API 404` znamená nedostupnost modelu. Nový hint ti to teď přesně řekne.
+- Přidaný `Bridge 5\d\d` pattern → odkaz na bridge stderr pro interní chyby.
+
 ## 2.17.1 — 2026-04-25
 
 ### Změny

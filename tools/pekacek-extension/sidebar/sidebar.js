@@ -2536,10 +2536,14 @@ function addErrorMessage(title, detail, hint) {
 function ttsErrorHint(msg) {
   if (/GEMINI_API_KEY není nastav/i.test(msg))
     return "Přidej `GEMINI_API_KEY=AIza…` do `~/pka/.env` (pozor na překlep — ne `GEMINY`) a restartuj bridge: `Ctrl+C` v terminálu + `node ~/pka/tools/pekacek-extension/bridge.mjs`.";
-  if (/404/.test(msg))
-    return "Model `gemini-3.1-flash-tts-preview` nedostupný v REST API pro tvůj účet. Zkontroluj Generative Language API v [Cloud Console](https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com), případně zkus `gemini-2.5-flash-preview-tts` jako fallback (úprava v `bridge.mjs`).";
+  if (/Bridge 404/i.test(msg))
+    return "Bridge nezná endpoint `/tts` — běží stará verze (před TTS updatem). Restartuj bridge: `Ctrl+C` v terminálu + `node ~/pka/tools/pekacek-extension/bridge.mjs`. V banneru by se měla objevit `Pekáček Bridge v2.11.0`.";
+  if (/Gemini TTS API 404/i.test(msg))
+    return "Gemini API vrátil 404 — model nedostupný v REST API pro tvůj účet. Zkontroluj Generative Language API v [Cloud Console](https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com), případně zkus `gemini-2.5-flash-preview-tts` jako fallback (úprava modelu v `bridge.mjs`).";
   if (/429|quota|rate.?limit/i.test(msg))
     return "Free tier limit dosažen (~10 RPM / 1500 RPD). Počkej minutu nebo přejdi na paid tier.";
+  if (/Bridge 5\d\d/i.test(msg))
+    return "Bridge interní chyba (5xx). Mrkni stderr terminálu kde bridge běží — bude tam detail `[bridge] /tts error: ...`.";
   if (/fetch failed|ECONNREFUSED|TypeError: Failed to fetch/i.test(msg))
     return "Bridge neběží na `:3888`. Spusť: `node ~/pka/tools/pekacek-extension/bridge.mjs`.";
   if (/moc dlouhý|znaků, max/i.test(msg))
