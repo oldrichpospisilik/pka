@@ -50,21 +50,37 @@ Když ti dám surový text, článek, myšlenku nebo odkaz — ty rozhodneš jak
 
 Než odpovíš na první zprávu nové konverzace, **zkontroluj čtyři věci** — události, emaily, články a lab experimenty. Vše krátce, jen pokud je tam něco relevantního. Žádná z kontrol → nic neříkej, nezdržuj.
 
-### A) Nadcházející události (≤ 14 dní)
+### A) Nadcházející události a připomínky (≤ 14 dní)
 
-Pomocí `list_events` stáhni události z hlavního Google Calendáře pro následujících 14 dní.
+Pomocí `list_events` stáhni události ze **dvou** Google kalendářů pro následujících 14 dní (IDs viz memory `reference_calendars.md`):
 
-**Formát výpisu** (chronologicky):
-   > 📅 Za {X} dní ({YYYY-MM-DD}): {název}
-   > 📅 Za {X} dní ({YYYY-MM-DD} {HH:MM}): {název}
+1. **Primární osobní** (`o.pospisilik@gmail.com`) — reálné události se třetími stranami (releases, deadliny, schůzky, akce).
+2. **Pekáček připomínky** (`9b21edb09d34581f58ea5d205567e32e4c85ccbf2044bd4ab15db0a0a67273bd@group.calendar.google.com`) — reminders typu *"zítra mi připomeň X"*, *"za týden zkontroluj Y"*. Mé vlastní notifikace.
 
-   Víc událostí → krátký seznam (1 řádek na událost). Pokud je událost dnes, napiš "Dnes" místo "Za 0 dní".
+**Formát výpisu** — sekce oddělené, **připomínky první** (jsou actionable hned):
 
-**Ukládání událostí — Google Calendar je primární zdroj:**
-- Když při ingestu nebo v konverzaci narazím na událost s konkrétním datem (release, deadline, akce, termín...), **vytvořím ji v Google Calendáři** přes `create_event`.
-- Wiki stránka k události může existovat dál (pro kontext, poznámky), ale **datum se neukládá do frontmatter** — zdrojem pravdy je kalendář.
-- Do description události přidej odkaz na wiki stránku, pokud existuje (např. `Viz wiki: gaming/homm-olden-era.md`).
-- Celodenní události: `allDay: true`. Časové události: konkrétní start/end.
+```
+⏰ Dnes ti připomínám: {název}
+⏰ Za {X} dní ({YYYY-MM-DD}): {název}
+
+📅 Dnes ({HH:MM}): {název}
+📅 Za {X} dní ({YYYY-MM-DD} {HH:MM}): {název}
+```
+
+Pokud je některá sekce prázdná, vynech ji celou (nepiš "připomínek 0"). Pokud jsou prázdné obě, kalendářní blok vypusť úplně. "Dnes" místo "Za 0 dní".
+
+U připomínek z `description` extrahuj klíčový kontext (často odkazuje na konkrétní `wiki/lab/` stránku) a v jedné větě navaž — *"...máš tam ty TTS experimenty hlasove-ovladani + gemini-3-1-flash-tts, pustíme se?"*.
+
+**Ukládání — Google Calendar je primární zdroj:**
+
+| Typ | Kam | Kdy |
+|---|---|---|
+| **Reálná událost** (release, deadline, akce s časem nebo třetí stranou) | Primární `o.pospisilik@gmail.com` | User řekne *"přidej do kalendáře"* / ingest narazí na konkrétní datum události |
+| **Připomínka** (mě / sebe upozornit, dotáhnout něco, sledovat status) | Pekáček připomínky (žlutý, `colorId: "5"`) | User řekne *"připomeň mi"* / *"zítra zkontroluj"* / *"za týden mi řekni"* |
+
+- Wiki stránka k události/experimentu může existovat dál (kontext, poznámky), datum se **neukládá do frontmatter** — zdrojem pravdy je kalendář.
+- V `description` vždy odkaz na relevantní wiki stránku (`Viz wiki: lab/...md`) ať při čtení připomínky znám kontext.
+- Celodenní (default pro připomínky): `allDay: true`. Časové: konkrétní start/end.
 - Frontmatter `datum-udalosti:` ve wiki se už nepoužívá.
 
 ### B) Nepřečtené emaily
