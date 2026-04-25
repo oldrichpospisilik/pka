@@ -14,6 +14,7 @@ import { spawn, spawnSync } from "child_process";
 import path from "path";
 import fs from "fs";
 import os from "os";
+import crypto from "node:crypto";
 import { fileURLToPath } from "url";
 
 const PORT = 3888;
@@ -1005,7 +1006,7 @@ checkEnvironment();
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`
   ╔══════════════════════════════════════╗
-  ║   Pekáček Bridge v2.11.0            ║
+  ║   Pekáček Bridge v2.11.1            ║
   ║   http://localhost:${PORT}/             ║
   ║                                      ║
   ║   ( o_o) ☕  Čekám na extension...   ║

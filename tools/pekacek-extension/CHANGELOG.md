@@ -5,6 +5,12 @@ Semver: `MAJOR.MINOR.PATCH`.
 - **MINOR** — nové feature, zpětně kompatibilní
 - **PATCH** — bugfixy, drobné úpravy
 
+## 2.17.3 — 2026-04-25 (bridge-only fix)
+
+### Bugfix
+- **`crypto.createHash is not a function`** v `/tts` endpointu. Existing code v bridge.mjs používal globální Web Crypto API (`crypto.randomUUID()`, ten je tam i bez importu), ale `crypto.createHash()` patří jen do Node `crypto` modulu. TTS cache key compute padl. Fix: explicitní `import crypto from "node:crypto"` na začátku — shadowuje global a expose celý Node crypto. Bridge banner: v2.11.0 → **v2.11.1**.
+- Smoke test po fixu: `curl -X POST :3888/tts -d '{"text":"..."}'` → HTTP 200, 165 KB WAV (24 kHz, mono, 16-bit) z reference combo Schedar + Empathetic + Natural.
+
 ## 2.17.2 — 2026-04-25
 
 ### Bugfix
