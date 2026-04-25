@@ -5,6 +5,28 @@ Semver: `MAJOR.MINOR.PATCH`.
 - **MINOR** — nové feature, zpětně kompatibilní
 - **PATCH** — bugfixy, drobné úpravy
 
+## 2.17.1 — 2026-04-25
+
+### Změny
+- **Chyby jako formátované bubliny v chatu**, ne v console/tooltipu. Univerzální helper `addErrorMessage(title, detail, hint)` v `sidebar.js` vyrenderuje červeně-akcentovanou bublinu se třemi sekcemi (titul, detail, hint). TTS catch path migrovaný jako první konzument.
+- **`ttsErrorHint(msg)`** — mapuje konkrétní error patterny na user-friendly nápovědy:
+  - "GEMINI_API_KEY není nastavený" → návod přidat do `.env` + restart bridge (s upozorněním na `GEMINY` překlep)
+  - "404" → návod ověřit Generative Language API + fallback model
+  - "429 / quota / rate limit" → vysvětlení free tier limitů
+  - "fetch failed / ECONNREFUSED" → bridge neběží
+  - "moc dlouhý / znaků, max" → 4000-char cap, jak změnit
+  - "AbortError / aborted" → 30s timeout, zkus znovu
+- Tlačítko 🔊 už nezůstává v ⚠ stavu — vrací se hned na 🔊, chyba se ukáže jako bublina (vidíš ji bez hoveru).
+- `error-msg` styling: červeno-pink akcent (`rgba(220, 80, 80, …)`), levý border 3 px, monospace `<code>` v detailu i hintu.
+
+### Použití pro další error paths (TODO)
+- /ask SSE error events (currently jdou jako prefixované text-message s ⚠️)
+- Bridge offline detection (currently jen console.log)
+- Dashboard refresh failures
+- Pin-to-wiki failures
+
+Migrace inkrementální — `addErrorMessage` je generic, stačí nahradit `addMessage("pekacek", "⚠️ chyba…")` na error patterny v existujícím kódu.
+
 ## 2.17.0 — 2026-04-25
 
 ### Nové

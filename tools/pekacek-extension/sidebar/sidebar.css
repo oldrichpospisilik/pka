@@ -344,6 +344,52 @@ body {
   75% { transform: rotate(3deg); }
 }
 
+/* Error bubble — formatovaná chyba v hlavním #messages chatu místo console/tooltipu.
+   Univerzální helper addErrorMessage(title, detail, hint) ji vyrenderuje. */
+.message.error-msg {
+  background: rgba(220, 80, 80, 0.06);
+  border: 1px solid rgba(220, 80, 80, 0.35);
+  border-left: 3px solid rgba(220, 80, 80, 0.7);
+}
+.message.error-msg .error-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: #ff8888;
+  margin-bottom: 6px;
+  letter-spacing: 0.2px;
+}
+.message.error-msg .error-detail {
+  font-size: 12px;
+  color: var(--text);
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+.message.error-msg .error-detail code {
+  font-family: var(--mono);
+  background: rgba(0, 0, 0, 0.30);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+  word-break: break-word;
+}
+[data-theme="light"] .message.error-msg .error-detail code {
+  background: rgba(0, 0, 0, 0.06);
+}
+.message.error-msg .error-hint {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-style: italic;
+  line-height: 1.4;
+}
+.message.error-msg .error-hint code {
+  font-family: var(--mono);
+  background: rgba(0, 0, 0, 0.20);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-style: normal;
+}
+
 /* MCP activity bubble — sidí v hlavním #messages chatu jako message.pekacek varianta.
    Pekáček s ASCII tělem drží rekvizitu (📸/🔭/✏️…) a krátkou friendly hlášku.
    Žádné copy/pin, žádný persist do historie — je to status, ne odpověď. */

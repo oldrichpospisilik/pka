@@ -2498,6 +2498,57 @@ function pinMessageToWiki(msgDiv, btn) {
   sendToBridge(pinPrompt, { action: "pin" });
 }
 
+// --- Error message bubble (formatted, in main chat) ---
+// Univerzální helper: kde zachytíš chybu, zobraz ji jako pekacek-bubble s
+// červenou nuancí, abys ji nemusel hledat v tooltipu nebo console. Nepersistuje
+// do historie konverzace (nepatří tam — je to provozní stav, ne content).
+function escErrHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]
+  ));
+}
+function formatErrDetail(text) {
+  return escErrHtml(text)
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\n/g, "<br>");
+}
+
+function addErrorMessage(title, detail, hint) {
+  if (!messagesEl) return;
+  const div = document.createElement("div");
+  div.className = "message pekacek error-msg";
+
+  const content = document.createElement("div");
+  content.className = "message-content";
+
+  let html = `<div class="error-title">&#x26A0;&#xFE0F; ${escErrHtml(title)}</div>`;
+  if (detail) html += `<div class="error-detail">${formatErrDetail(detail)}</div>`;
+  if (hint) html += `<div class="error-hint">&#x1F4A1; ${formatErrDetail(hint)}</div>`;
+  content.innerHTML = html;
+
+  div.appendChild(content);
+  messagesEl.appendChild(div);
+  if (typeof scrollToBottom === "function") scrollToBottom();
+}
+
+// Mapuje konkrétní error patterny na user-friendly hint. Přidávej dle potřeby.
+function ttsErrorHint(msg) {
+  if (/GEMINI_API_KEY není nastav/i.test(msg))
+    return "Přidej `GEMINI_API_KEY=AIza…` do `~/pka/.env` (pozor na překlep — ne `GEMINY`) a restartuj bridge: `Ctrl+C` v terminálu + `node ~/pka/tools/pekacek-extension/bridge.mjs`.";
+  if (/404/.test(msg))
+    return "Model `gemini-3.1-flash-tts-preview` nedostupný v REST API pro tvůj účet. Zkontroluj Generative Language API v [Cloud Console](https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com), případně zkus `gemini-2.5-flash-preview-tts` jako fallback (úprava v `bridge.mjs`).";
+  if (/429|quota|rate.?limit/i.test(msg))
+    return "Free tier limit dosažen (~10 RPM / 1500 RPD). Počkej minutu nebo přejdi na paid tier.";
+  if (/fetch failed|ECONNREFUSED|TypeError: Failed to fetch/i.test(msg))
+    return "Bridge neběží na `:3888`. Spusť: `node ~/pka/tools/pekacek-extension/bridge.mjs`.";
+  if (/moc dlouhý|znaků, max/i.test(msg))
+    return "Zpráva přesáhla 4000 znaků. Rozsekat na menší kusy nebo upravit `TTS_MAX_TEXT_LEN` v `bridge.mjs`.";
+  if (/AbortError|aborted/i.test(msg))
+    return "API call timeoutoval (30 s). Zkus znovu — Gemini občas má pomalé starty.";
+  return "";
+}
+
 // --- TTS playback (Gemini Flash TTS via bridge) ---
 // Stripuje markdown a posílá čistý text na /tts. Bridge cachuje WAV per (text, voice, style, pace).
 
@@ -2581,13 +2632,14 @@ async function playMessageTTS(msgDiv, btn) {
   } catch (err) {
     btn.disabled = false;
     btn.dataset.state = "idle";
-    btn.textContent = "⚠";
-    btn.title = `TTS chyba: ${err.message}`;
-    setTimeout(() => {
-      btn.textContent = "🔊";
-      btn.title = "Přehrát hlasem (Gemini TTS)";
-    }, 3000);
+    btn.textContent = "🔊";
+    btn.title = "Přehrát hlasem (Gemini TTS)";
     console.error("[Pekacek TTS]", err);
+    addErrorMessage(
+      "TTS — přehrávání selhalo",
+      err.message || String(err),
+      ttsErrorHint(err.message || "")
+    );
   }
 }
 
