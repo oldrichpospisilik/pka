@@ -5,6 +5,33 @@ Semver: `MAJOR.MINOR.PATCH`.
 - **MINOR** — nové feature, zpětně kompatibilní
 - **PATCH** — bugfixy, drobné úpravy
 
+## 2.17.0 — 2026-04-25
+
+### Nové
+- **🔊 Přehrát hlasem** — třetí action button na každé Pekáčkově odpovědi (vedle pin 📌 a copy ⧉). Klik → bridge `POST /tts` → Gemini 3.1 Flash TTS Preview → WAV → přehraje v sidebaru. Druhý klik = stop.
+  - Reference combo z `lab/gemini-3-1-flash-tts.md`: voice **Schedar**, style **Empathetic**, pace **Natural** (CZ prakticky perfektní). Style/pace jdou jako natural-language prefix v textu.
+  - **Markdown stripper** — code bloky, bold/italic, wiki-links, headings, list bullets, tabulky se před TTS odstraní (TTS by je číslal jako "hvězdička hvězdička").
+  - **Cache** v `~/pka/.pekacek-tts-cache/<sha256>.wav` (klíč = text + voice + style + pace), max 200 položek (~50 MB), oldest pruned podle mtime. Druhé přehrání stejné odpovědi je instant a zdarma.
+  - **States**: idle 🔊 / loading ⏳ / playing ⏹ / error ⚠ (s detailem v `title`). Loading + playing tlačítko viditelné i bez hoveru.
+- **Bridge `.env` autoload** — `bridge.mjs` na startu načte `~/pka/.env` do `process.env` (bez dotenv depu, ~30 řádků). Pre-existing `process.env` má přednost. Loaduje vše, ale primárně cílí na `GEMINI_API_KEY`.
+- **Bridge banner**: 2.10.1 → **2.11.0** (nový `/tts` endpoint).
+
+### Setup pro uživatele
+1. Vytvořit Gemini API key: <https://aistudio.google.com/apikey> → "Create API key" → kopírovat (začíná `AIza…`).
+2. Přidat do `~/pka/.env`:
+   ```
+   GEMINI_API_KEY=AIza...
+   ```
+3. Restartovat bridge (`Ctrl+C` v terminálu kde bridge běží, pak `node ~/pka/tools/pekacek-extension/bridge.mjs`).
+4. Reload extension v `chrome://extensions/`.
+5. 🔊 button na každé Pekáčkově odpovědi — klikni a poslouchej.
+
+### Limity / pozor
+- Free tier Gemini API: ~10 RPM, denní limit ~1500 requestů — pro běžné použití stačí.
+- Paid tier: $1/M text in + $20/M audio tokens (~25 audio tokenů/sekundu = ~$0.40 / 10 min audia).
+- Max délka textu na 1 call: 4000 znaků (po stripu markdownu) — delší odpovědi budou oříznuté na backendu.
+- Cache je per-text-doslovně — i drobná oprava v textu = nový API call.
+
 ## 2.16.1 — 2026-04-25
 
 ### Změny

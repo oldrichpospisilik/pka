@@ -941,15 +941,52 @@ body {
 }
 
 .copy-btn { right: 4px; }
-.pin-btn { right: 30px; }
+.pin-btn  { right: 30px; }
+.tts-btn  { right: 56px; }
+
+.tts-btn {
+  position: absolute;
+  top: 4px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 4px;
+  background: rgba(var(--green-rgb), 0.08);
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, background 0.15s, color 0.15s;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
 .message.pekacek:hover .copy-btn,
-.message.pekacek:hover .pin-btn {
+.message.pekacek:hover .pin-btn,
+.message.pekacek:hover .tts-btn {
   opacity: 1;
 }
 
+/* Pokud TTS zrovna hraje / loading, drž tlačítko viditelné i bez hoveru */
+.tts-btn[data-state="playing"],
+.tts-btn[data-state="loading"] {
+  opacity: 1;
+}
+.tts-btn[data-state="playing"] {
+  background: rgba(var(--accent-rgb), 0.25);
+  color: var(--accent);
+}
+.tts-btn[data-state="loading"] {
+  background: rgba(var(--yellow-rgb), 0.20);
+  color: var(--yellow);
+}
+
 .copy-btn:hover,
-.pin-btn:hover {
+.pin-btn:hover,
+.tts-btn:hover {
   background: rgba(var(--green-rgb), 0.25);
   color: var(--green);
 }

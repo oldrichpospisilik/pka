@@ -2440,6 +2440,18 @@ function addMessage(role, content, isLoading = false) {
       await pinMessageToWiki(div, pinBtn);
     });
     div.appendChild(pinBtn);
+
+    // TTS: přehrát zprávu hlasem (Gemini Flash TTS, Schedar voice).
+    // Bridge endpoint POST /tts vrací WAV; vyžaduje GEMINI_API_KEY v ~/pka/.env.
+    const ttsBtn = document.createElement("button");
+    ttsBtn.className = "tts-btn";
+    ttsBtn.title = "Přehrát hlasem (Gemini TTS)";
+    ttsBtn.textContent = "🔊";
+    ttsBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await playMessageTTS(div, ttsBtn);
+    });
+    div.appendChild(ttsBtn);
   }
 
   messagesEl.appendChild(div);
@@ -2484,6 +2496,99 @@ function pinMessageToWiki(msgDiv, btn) {
 
   addMessage("user", "📌 Ulož předchozí odpověď do wiki");
   sendToBridge(pinPrompt, { action: "pin" });
+}
+
+// --- TTS playback (Gemini Flash TTS via bridge) ---
+// Stripuje markdown a posílá čistý text na /tts. Bridge cachuje WAV per (text, voice, style, pace).
+
+function stripMarkdownForTTS(text) {
+  return String(text || "")
+    .replace(/```[\s\S]*?```/g, "")          // code blocks
+    .replace(/`([^`]+)`/g, "$1")              // inline code
+    .replace(/\*\*(.+?)\*\*/g, "$1")          // bold
+    .replace(/\*(.+?)\*/g, "$1")              // italic
+    .replace(/__(.+?)__/g, "$1")              // bold alt
+    .replace(/\[\[(.+?)\]\]/g, "$1")          // wiki links
+    .replace(/^#{1,6}\s+/gm, "")              // headings
+    .replace(/^[-*+]\s+/gm, "")               // list bullets
+    .replace(/^\s*\|.*\|\s*$/gm, "")          // table rows (TTS si s nimi neporadí)
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+async function playMessageTTS(msgDiv, btn) {
+  if (!msgDiv || !btn) return;
+
+  // Druhý klik při hraní = stop
+  if (btn.dataset.state === "playing" && btn._audio) {
+    try {
+      btn._audio.pause();
+      btn._audio.currentTime = 0;
+      if (btn._objectUrl) URL.revokeObjectURL(btn._objectUrl);
+    } catch {}
+    delete btn._audio;
+    delete btn._objectUrl;
+    btn.dataset.state = "idle";
+    btn.textContent = "🔊";
+    return;
+  }
+  if (btn.dataset.state === "loading") return; // ignore double-click during fetch
+
+  const raw = msgDiv.dataset.rawText || "";
+  const text = stripMarkdownForTTS(raw);
+  if (!text) return;
+
+  btn.dataset.state = "loading";
+  btn.textContent = "⏳";
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(`${BRIDGE_URL}/tts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.error || `Bridge ${res.status}`);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+
+    btn._audio = audio;
+    btn._objectUrl = url;
+    btn.dataset.state = "playing";
+    btn.textContent = "⏹";
+    btn.disabled = false;
+
+    audio.onended = () => {
+      btn.dataset.state = "idle";
+      btn.textContent = "🔊";
+      try { URL.revokeObjectURL(url); } catch {}
+      delete btn._audio;
+      delete btn._objectUrl;
+    };
+    audio.onerror = () => {
+      btn.dataset.state = "idle";
+      btn.textContent = "🔊";
+      try { URL.revokeObjectURL(url); } catch {}
+      delete btn._audio;
+      delete btn._objectUrl;
+    };
+
+    await audio.play();
+  } catch (err) {
+    btn.disabled = false;
+    btn.dataset.state = "idle";
+    btn.textContent = "⚠";
+    btn.title = `TTS chyba: ${err.message}`;
+    setTimeout(() => {
+      btn.textContent = "🔊";
+      btn.title = "Přehrát hlasem (Gemini TTS)";
+    }, 3000);
+    console.error("[Pekacek TTS]", err);
+  }
 }
 
 function formatMessage(text) {

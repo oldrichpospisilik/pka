@@ -22,6 +22,36 @@ const WORKING_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 const WIKI_SYMLINK = path.join(WORKING_DIR, "wiki");
 const WIKI_TARGET = "/mnt/p/Wiki/Wiki";
 
+// Načti `~/pka/.env` do process.env (žádný dotenv dep). Pre-existing process.env
+// vyhrává — pokud máš GEMINI_API_KEY už exportovaný v shellu, .env se ignoruje.
+function loadEnvFile() {
+  const envPath = path.join(WORKING_DIR, ".env");
+  if (!fs.existsSync(envPath)) return;
+  try {
+    const lines = fs.readFileSync(envPath, "utf-8").split(/\r?\n/);
+    let loaded = 0;
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eq = trimmed.indexOf("=");
+      if (eq < 0) continue;
+      const key = trimmed.slice(0, eq).trim();
+      let val = trimmed.slice(eq + 1).trim();
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      if (!process.env[key]) {
+        process.env[key] = val;
+        loaded++;
+      }
+    }
+    process.stderr.write(`[bridge] .env: loaded ${loaded} keys from ${envPath}\n`);
+  } catch (err) {
+    process.stderr.write(`[bridge] .env load error: ${err.message}\n`);
+  }
+}
+loadEnvFile();
+
 // Article session cache: pageUrl -> { title, sessionId }
 const articleCache = new Map();
 
@@ -57,6 +87,117 @@ function getArticleStats() {
     process.stderr.write(`[bridge] getArticleStats error: ${err.message}\n`);
     return { count: 0, list: [], error: err.message };
   }
+}
+
+// --- Text-to-Speech (Gemini 3.1 Flash TTS Preview) ---
+// API key čteme z process.env.GEMINI_API_KEY (loadEnvFile() ho dotáhne z ~/pka/.env).
+// Reference combo (prakticky perfektní CZ): Schedar voice + Empathetic style + Natural pace.
+// Defaultní hodnoty viz wiki/lab/gemini-3-1-flash-tts.md.
+const TTS_CACHE_DIR = path.join(WORKING_DIR, ".pekacek-tts-cache");
+const TTS_CACHE_MAX = 200;            // počet cached WAVů, oldest pruned (~50 MB)
+const TTS_TIMEOUT_MS = 30_000;
+const TTS_DEFAULT_VOICE = "Schedar";
+const TTS_DEFAULT_STYLE = "Empathetic";
+const TTS_DEFAULT_PACE = "Natural";
+const TTS_MAX_TEXT_LEN = 4000;        // bezpečný cap pro 1 call
+
+if (!fs.existsSync(TTS_CACHE_DIR)) {
+  try { fs.mkdirSync(TTS_CACHE_DIR, { recursive: true }); } catch {}
+}
+
+function ttsCacheKey(text, voice, style, pace) {
+  return crypto.createHash("sha256")
+    .update([voice, style, pace, text].join("\n"))
+    .digest("hex");
+}
+
+function pruneTtsCache() {
+  try {
+    const files = fs.readdirSync(TTS_CACHE_DIR)
+      .filter(f => f.endsWith(".wav"))
+      .map(f => ({ f, mtime: fs.statSync(path.join(TTS_CACHE_DIR, f)).mtimeMs }))
+      .sort((a, b) => a.mtime - b.mtime);
+    while (files.length > TTS_CACHE_MAX) {
+      const oldest = files.shift();
+      try { fs.unlinkSync(path.join(TTS_CACHE_DIR, oldest.f)); } catch {}
+    }
+  } catch {}
+}
+
+// Gemini Flash TTS vrací surové PCM (16-bit signed LE), browser potřebuje WAV.
+function wrapPcmAsWav(pcm, sampleRate = 24000, channels = 1, bitsPerSample = 16) {
+  const byteRate = sampleRate * channels * (bitsPerSample / 8);
+  const blockAlign = channels * (bitsPerSample / 8);
+  const dataSize = pcm.length;
+  const fileSize = 36 + dataSize;
+  const h = Buffer.alloc(44);
+  h.write("RIFF", 0);
+  h.writeUInt32LE(fileSize, 4);
+  h.write("WAVE", 8);
+  h.write("fmt ", 12);
+  h.writeUInt32LE(16, 16);
+  h.writeUInt16LE(1, 20);
+  h.writeUInt16LE(channels, 22);
+  h.writeUInt32LE(sampleRate, 24);
+  h.writeUInt32LE(byteRate, 28);
+  h.writeUInt16LE(blockAlign, 32);
+  h.writeUInt16LE(bitsPerSample, 34);
+  h.write("data", 36);
+  h.writeUInt32LE(dataSize, 40);
+  return Buffer.concat([h, pcm]);
+}
+
+async function callGeminiTTS({ text, voice, style, pace }) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY není nastavený. Přidej do ~/pka/.env: GEMINI_API_KEY=AIza… a restartuj bridge.");
+  }
+  const cleaned = (text || "").trim();
+  if (!cleaned) throw new Error("Prázdný text.");
+  if (cleaned.length > TTS_MAX_TEXT_LEN) {
+    throw new Error(`Text je moc dlouhý (${cleaned.length} znaků, max ${TTS_MAX_TEXT_LEN}).`);
+  }
+
+  // Style/pace jdou přes natural-language prefix v textu (Gemini reaguje stejně jako
+  // na "Director's note" v AI Studiu).
+  const promptText = `[${style}, ${pace} pace] ${cleaned}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const body = {
+    contents: [{ parts: [{ text: promptText }] }],
+    generationConfig: {
+      responseModalities: ["AUDIO"],
+      speechConfig: {
+        voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } }
+      }
+    }
+  };
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TTS_TIMEOUT_MS);
+  let res;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    throw new Error(`Gemini TTS API ${res.status}: ${errBody.slice(0, 300)}`);
+  }
+  const json = await res.json();
+  const inline = json?.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+  if (!inline?.data) {
+    throw new Error(`Gemini neresturnoval audio (${JSON.stringify(json).slice(0, 200)}…)`);
+  }
+  const rateMatch = (inline.mimeType || "").match(/rate=(\d+)/);
+  const sampleRate = rateMatch ? parseInt(rateMatch[1], 10) : 24000;
+  const pcm = Buffer.from(inline.data, "base64");
+  return wrapPcmAsWav(pcm, sampleRate);
 }
 
 // --- YouTube transcript (yt-dlp) ---
@@ -524,6 +665,63 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Text-to-Speech (Gemini Flash TTS) — vrací WAV jako audio/wav
+  if (req.method === "POST" && req.url === "/tts") {
+    let body = "";
+    req.on("data", (chunk) => (body += chunk));
+    req.on("end", async () => {
+      try {
+        const parsed = JSON.parse(body || "{}");
+        const text = String(parsed.text || "");
+        const voice = String(parsed.voice || TTS_DEFAULT_VOICE);
+        const style = String(parsed.style || TTS_DEFAULT_STYLE);
+        const pace = String(parsed.pace || TTS_DEFAULT_PACE);
+        if (!text.trim()) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          return res.end(JSON.stringify({ error: "Prázdný text." }));
+        }
+
+        // Cache lookup
+        const key = ttsCacheKey(text, voice, style, pace);
+        const cachePath = path.join(TTS_CACHE_DIR, `${key}.wav`);
+        let wav;
+        let fromCache = false;
+        if (fs.existsSync(cachePath)) {
+          try {
+            wav = fs.readFileSync(cachePath);
+            fromCache = true;
+            // Touch mtime ať pruneTtsCache nezahodí často používané
+            try { fs.utimesSync(cachePath, new Date(), new Date()); } catch {}
+          } catch {}
+        }
+        if (!wav) {
+          const t0 = Date.now();
+          wav = await callGeminiTTS({ text, voice, style, pace });
+          const elapsed = Date.now() - t0;
+          process.stderr.write(`[bridge] TTS fresh: voice=${voice} text="${text.slice(0, 40).replace(/\n/g, " ")}…" wav=${(wav.length / 1024).toFixed(1)}KB ${elapsed}ms\n`);
+          try { fs.writeFileSync(cachePath, wav); } catch {}
+          pruneTtsCache();
+        } else {
+          process.stderr.write(`[bridge] TTS cache: voice=${voice} key=${key.slice(0, 8)}… ${(wav.length / 1024).toFixed(1)}KB\n`);
+        }
+
+        res.writeHead(200, {
+          "Content-Type": "audio/wav",
+          "Content-Length": wav.length,
+          "X-Pekacek-Cache": fromCache ? "hit" : "miss",
+        });
+        res.end(wav);
+      } catch (err) {
+        process.stderr.write(`[bridge] /tts error: ${err.message}\n`);
+        if (!res.headersSent) {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      }
+    });
+    return;
+  }
+
   // Stop running /ask request
   if (req.method === "POST" && req.url.startsWith("/stop")) {
     const url = new URL(req.url, `http://localhost:${PORT}`);
@@ -807,7 +1005,7 @@ checkEnvironment();
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`
   ╔══════════════════════════════════════╗
-  ║   Pekáček Bridge v2.10.1            ║
+  ║   Pekáček Bridge v2.11.0            ║
   ║   http://localhost:${PORT}/             ║
   ║                                      ║
   ║   ( o_o) ☕  Čekám na extension...   ║
