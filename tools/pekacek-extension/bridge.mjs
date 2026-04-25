@@ -392,6 +392,138 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ ok: true }));
   }
 
+  // Quiz generation — non-streaming JSON. Pekáček quiz Phase 1: 6× ABCD multiple-choice
+  // s Bloomovou taxonomií. Vstup: { pageContent, pageUrl, pageTitle }. Výstup: { questions: [...] }.
+  if (req.method === "POST" && req.url === "/quiz/generate") {
+    let body = "";
+    req.on("data", (chunk) => (body += chunk));
+    req.on("end", () => {
+      try {
+        const { pageContent, pageUrl, pageTitle } = JSON.parse(body);
+        if (!pageContent || pageContent.length < 200) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          return res.end(JSON.stringify({ error: "Stránka nemá dost obsahu (min 200 znaků)." }));
+        }
+
+        const reqId = crypto.randomUUID().slice(-8);
+        const ts = () => new Date().toISOString().slice(11, 23);
+        const log = (msg) => process.stderr.write(`[bridge ${ts()}] [quiz ${reqId}] ${msg}\n`);
+
+        const trimmed = pageContent.length > 18000
+          ? pageContent.slice(0, 18000) + "\n\n[…obsah zkrácen]"
+          : pageContent;
+        const wordCount = trimmed.split(/\s+/).length;
+
+        const prompt =
+          `Vytvoř kvíz nad níže uvedenou stránkou. Vrať POUZE validní JSON, žádný text okolo, žádný markdown fence.\n\n` +
+          `## Pravidla\n\n` +
+          `1. **6 otázek**, narůstající obtížnost podle Bloomovy taxonomie:\n` +
+          `   - q1: recall (klíčový fakt z článku)\n` +
+          `   - q2: comprehension (porozumění hlavní tezi/argumentu)\n` +
+          `   - q3: application (jak by argument fungoval pokud by platilo Z?)\n` +
+          `   - q4: analysis (proč autor zvolil X místo Y? co by oslabilo závěr?)\n` +
+          `   - q5: synthesis (propojení s obecnějším principem nebo jiným tématem)\n` +
+          `   - q6: evaluation (kde je nejslabší místo článku, mezera v důkazech, skok v logice?)\n\n` +
+          `2. **Otázky na pochopení a aplikaci, ne na bezvýznamná fakta.** Vyhni se "V kterém roce…", "Kolik příkladů autor zmiňuje…", "Jak se jmenuje X v sekci Y". Tahle fakta jsou nuda a user je do týdne zapomene.\n\n` +
+          `3. **Žádné chytáky** — všechny otázky musí jít zodpovědět z článku, ne z externí znalosti.\n\n` +
+          `4. **Distraktory musí být pravdě podobné.** Žádné absurdní možnosti. Ideálně: 1 správná + 2 částečně správné/neúplné + 1 dobře znějící, ale v rozporu s článkem.\n\n` +
+          `5. **Český jazyk.** Otázka max 2 věty. Každá option max 1 věta.\n\n` +
+          `6. **Všech 6 otázek je multiple-choice se 4 možnostmi A/B/C/D.** (Open-ended otázky teď negeneruj — to je další fáze.)\n\n` +
+          `## Výstupní JSON schema\n\n` +
+          `{\n` +
+          `  "questions": [\n` +
+          `    {\n` +
+          `      "n": 1,\n` +
+          `      "bloom": "recall",\n` +
+          `      "type": "multiple-choice",\n` +
+          `      "question": "...",\n` +
+          `      "options": ["A) ...", "B) ...", "C) ...", "D) ..."],\n` +
+          `      "correct": "B",\n` +
+          `      "rationale": "1-2 věty proč je B správně (zobrazí se uživateli jako feedback)."\n` +
+          `    }\n` +
+          `  ]\n` +
+          `}\n\n` +
+          `Pole "bloom" může být: recall, comprehension, application, analysis, synthesis, evaluation. Pole "correct" je písmeno A/B/C/D. "options" jsou přesně 4 řetězce začínající "A) ", "B) ", "C) ", "D) ".\n\n` +
+          `## Stránka k testování\n\n` +
+          `Název: ${pageTitle || "(bez názvu)"}\n` +
+          `URL: ${pageUrl || "(bez URL)"}\n` +
+          `Délka: ~${wordCount} slov\n\n` +
+          `OBSAH:\n${trimmed}`;
+
+        log(`START title="${(pageTitle || "").slice(0, 50)}" len=${pageContent.length}`);
+
+        const args = [
+          "-p", prompt,
+          "--output-format", "text",
+          "--append-system-prompt",
+          "Jsi generátor kvízů pro Pekáček. Vracej POUZE validní JSON podle zadaného schématu, bez jakéhokoliv textu okolo, bez markdown fence. Žádné MCP tooly nepotřebuješ.",
+        ];
+
+        const proc = spawn(CLAUDE_BIN, args, {
+          cwd: WORKING_DIR,
+          env: { ...process.env },
+          timeout: 120_000,
+        });
+
+        let stdout = "";
+        let stderr = "";
+        let responded = false;
+        const respond = (status, payload) => {
+          if (responded) return;
+          responded = true;
+          res.writeHead(status, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(payload));
+        };
+
+        proc.stdout.on("data", (c) => (stdout += c));
+        proc.stderr.on("data", (c) => (stderr += c));
+        proc.on("error", (err) => {
+          log(`SPAWN ERROR: ${err.message}`);
+          respond(500, { error: `spawn: ${err.message}` });
+        });
+        proc.on("close", (code) => {
+          if (code !== 0) {
+            log(`EXIT ${code} stderr=${stderr.slice(0, 200)}`);
+            return respond(500, { error: stderr.trim() || `claude exit ${code}` });
+          }
+          const s = stdout.indexOf("{");
+          const e = stdout.lastIndexOf("}");
+          if (s < 0 || e <= s) {
+            log(`PARSE ERROR: žádný JSON v ${stdout.length} znacích`);
+            return respond(500, { error: "Claude nevrátil JSON. Zkus to znovu." });
+          }
+          try {
+            const parsed = JSON.parse(stdout.slice(s, e + 1));
+            if (!Array.isArray(parsed.questions) || parsed.questions.length === 0) {
+              throw new Error("Žádné otázky v odpovědi");
+            }
+            // Validate per-question shape
+            for (const [i, q] of parsed.questions.entries()) {
+              if (!q.question || !Array.isArray(q.options) || q.options.length !== 4 || !q.correct) {
+                throw new Error(`Otázka ${i + 1} má neplatný tvar`);
+              }
+              if (!/^[A-D]$/.test(q.correct)) {
+                throw new Error(`Otázka ${i + 1}: correct="${q.correct}" není A-D`);
+              }
+            }
+            log(`OK ${parsed.questions.length} otázek`);
+            respond(200, parsed);
+          } catch (err) {
+            log(`PARSE ERROR: ${err.message}`);
+            respond(500, { error: `JSON parse: ${err.message}` });
+          }
+        });
+      } catch (err) {
+        process.stderr.write(`[bridge] /quiz/generate error: ${err.message}\n`);
+        if (!res.headersSent) {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      }
+    });
+    return;
+  }
+
   // Stop running /ask request
   if (req.method === "POST" && req.url.startsWith("/stop")) {
     const url = new URL(req.url, `http://localhost:${PORT}`);

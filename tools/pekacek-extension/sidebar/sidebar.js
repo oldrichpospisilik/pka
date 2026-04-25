@@ -71,6 +71,9 @@ async function saveSessions(sessions) {
 
 async function persistCurrentSession() {
   if (!currentSession || currentSession.messages.length === 0) return;
+  // Don't archive sessions where user didn't actually engage — Pekáček greeting / context offer
+  // alone shouldn't create a history entry.
+  if (!currentSession.messages.some((m) => m.role === "user")) return;
   currentSession.updatedAt = Date.now();
   currentSession.articleRead = articleRead;
   if (!currentSession.url && currentPageContent?.url) {
@@ -135,6 +138,15 @@ async function restoreSessionFromStorage(id) {
   }
 }
 
+function extractHostname(url) {
+  if (!url) return null;
+  if (url.startsWith("file://")) return "soubor";
+  try {
+    const u = new URL(url);
+    return u.hostname.replace(/^www\./, "") || null;
+  } catch { return null; }
+}
+
 function formatAgo(ms) {
   const s = Math.floor(ms / 1000);
   if (s < 60) return "před chvílí";
@@ -165,17 +177,34 @@ async function openHistoryPanel() {
     item.className = "history-item";
     if (s.id === currentSession?.id) item.classList.add("current");
 
+    // Title = page title (kde uživatel byl) > first user message > "(bez názvu)"
+    // Subtitle = první user message (pokud byl použit page title jako primární)
+    const userQuery = s.title && s.title !== "Nová konverzace" ? s.title : null;
+    const pageLabel = s.urlTitle ? s.urlTitle.trim() : null;
+    const primaryText = pageLabel || userQuery || "(bez názvu)";
+    const secondaryText = pageLabel && userQuery && pageLabel !== userQuery ? userQuery : null;
+
     const titleDiv = document.createElement("div");
     titleDiv.className = "history-item-title";
-    titleDiv.textContent = s.title || "(bez názvu)";
+    titleDiv.textContent = primaryText;
+    item.appendChild(titleDiv);
+
+    if (secondaryText) {
+      const subDiv = document.createElement("div");
+      subDiv.className = "history-item-subtitle";
+      subDiv.textContent = `↳ ${secondaryText}`;
+      item.appendChild(subDiv);
+    }
 
     const metaDiv = document.createElement("div");
     metaDiv.className = "history-item-meta";
     const msgCount = s.messages?.length || 0;
-    const urlMark = s.url ? " · 🔗" : "";
-    metaDiv.textContent = `${formatAgo(Date.now() - s.updatedAt)} · ${msgCount} zpráv${urlMark}`;
-
-    item.appendChild(titleDiv);
+    const host = extractHostname(s.url);
+    metaDiv.textContent = [
+      host,
+      formatAgo(Date.now() - s.updatedAt),
+      `${msgCount} zpráv`,
+    ].filter(Boolean).join(" · ");
     item.appendChild(metaDiv);
 
     item.addEventListener("click", async () => {
@@ -250,10 +279,55 @@ document.getElementById("reset-btn").addEventListener("click", () => {
   resetChat();
 });
 
+// Theme toggle — light/dark. chrome.storage.local = authoritativní (drží přes zavření sidebaru),
+// localStorage = sync fast-path proti FOUC (inline script v <head>).
+const themeBtn = document.getElementById("theme-btn");
+function applyTheme(theme) {
+  if (theme === "light") document.documentElement.dataset.theme = "light";
+  else delete document.documentElement.dataset.theme;
+  const isLight = theme === "light";
+  themeBtn.innerHTML = isLight ? "&#x2600;" : "&#x1F319;"; // ☀ / 🌙
+  themeBtn.title = isLight ? "Přepnout na tmavý motiv" : "Přepnout na světlý motiv";
+}
+(async function initTheme() {
+  try {
+    const r = await chrome.storage.local.get("pekacekTheme");
+    const stored = r?.pekacekTheme;
+    if (stored === "light" || stored === "dark") {
+      applyTheme(stored);
+      try { localStorage.setItem("pekacekTheme", stored); } catch {}
+      return;
+    }
+  } catch {}
+  // fallback na to co už head script nastavil z localStorage
+  applyTheme(document.documentElement.dataset.theme === "light" ? "light" : "dark");
+})();
+themeBtn.addEventListener("click", () => {
+  const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+  applyTheme(next);
+  try { localStorage.setItem("pekacekTheme", next); } catch {}
+  try { chrome.storage.local.set({ pekacekTheme: next }); } catch {}
+});
+
 // History button — opens overlay with past sessions
 document.getElementById("history-btn").addEventListener("click", openHistoryPanel);
 document.getElementById("history-close").addEventListener("click", () => {
   document.getElementById("history-panel").classList.add("hidden");
+});
+document.getElementById("history-clear").addEventListener("click", async () => {
+  const sessions = await listSessions();
+  if (sessions.length === 0) return;
+  if (!confirm(`Smazat všech ${sessions.length} uložených konverzací? Tahle akce je nevratná.`)) return;
+  await saveSessions([]);
+  // Také začít čistou aktuální session, aby v UI nezbylo "current" odkazování na neuloženou věc
+  startNewSession();
+  messagesEl.innerHTML = "";
+  messageCounter = 0;
+  articleRead = false;
+  lastReadUrl = null;
+  currentPageContent = null;
+  openHistoryPanel(); // refresh
+  setTimeout(() => loadTabInfo(), 200);
 });
 
 // Stop button
@@ -661,6 +735,12 @@ function loadTabInfo(retryCount = 0) {
 
     pageIndicator.textContent = title ? truncate(title, 35) : "—";
 
+    // Capture URL/title for current session — i bez extrakce obsahu, ať historie ví odkud ses ptal.
+    if (currentSession && !currentSession.url && url && !url.startsWith("chrome://") && !url.startsWith("chrome-extension://")) {
+      currentSession.url = url;
+      currentSession.urlTitle = title || null;
+    }
+
     // Offer to read — ale jen pokud nemáme rozběhnutou konverzaci
     if (!articleRead && url && url !== lastReadUrl) {
       // Pokud aktuální session už má zprávy, uživatel s Pekáčkem mluvil → neopakovat nabídku
@@ -681,9 +761,31 @@ function loadTabInfo(retryCount = 0) {
         return;
       }
 
-      offerToRead(title || "tato stránka", url);
+      const ctx = detectContextType(url);
+      offerContextHelp(ctx, title || "tato stránka", url);
     }
   });
+}
+
+function detectContextType(url) {
+  if (!url) return "article";
+  if (url.startsWith("file://")) return "file";
+  try {
+    const u = new URL(url);
+    const host = u.hostname.toLowerCase();
+    if (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "0.0.0.0" ||
+      /^192\.168\./.test(host) ||
+      /^10\./.test(host) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+      host.endsWith(".local")
+    ) return "local-dev";
+    if (host === "mail.google.com") return "gmail";
+    if (host === "calendar.google.com") return "gcal";
+  } catch {}
+  return "article";
 }
 
 // Extract full page content (on demand — uses content script)
@@ -702,34 +804,72 @@ function extractPageContent() {
   });
 }
 
-// Offer Pekáček to read the article (just from title+URL, no content script)
-function offerToRead(title, url) {
-  const msgId = addMessage("pekacek",
-    `Vidím článek: **${truncate(title, 50)}**\n\n` +
-    `Mám si ho přečíst? Pak budu rychlejší s dalšíma akcema.`
-  );
+// Offer Pekáček help based on context (article / file / local dev / gmail / gcal).
+// Greeting only — primary akci dáváme jen tam, kde má smysl (článek, soubor).
+// "Necti" odebere celou bublinu (žádná stopa po zamítnuté nabídce).
+function offerContextHelp(ctxType, title, url) {
+  const shortTitle = truncate(title, 50);
+  let bodyMd, primary;
 
+  switch (ctxType) {
+    case "file":
+      bodyMd =
+        `Vidím soubor: **${shortTitle}**\n\n` +
+        `Mám si ho přečíst?`;
+      primary = { label: "Přečti soubor", handler: () => readArticle(title, url) };
+      break;
+    case "local-dev":
+      bodyMd =
+        `Vidím lokální dev — **${shortTitle}**.\n\n` +
+        `Mám ti pomoct s vývojem? Můžu mrknout na obsah, číst soubory v projektu, hledat v repu, debugovat.`;
+      primary = null;
+      break;
+    case "gmail":
+      bodyMd =
+        `Vidím Gmail.\n\n` +
+        `Chceš pomoct s emailem? Můžu shrnout nepřečtené, navrhnout odpověď, labelovat. Stačí říct.`;
+      primary = null;
+      break;
+    case "gcal":
+      bodyMd =
+        `Vidím Google Calendar.\n\n` +
+        `Co potřebuješ — vytvořit událost, projít agendu, najít volný slot? Stačí říct.`;
+      primary = null;
+      break;
+    case "article":
+    default:
+      bodyMd =
+        `Vidím článek: **${shortTitle}**\n\n` +
+        `Načtu si ho dopředu? Další akce pak budou rychlejší.`;
+      primary = { label: "Přečti si ho", handler: () => readArticle(title, url) };
+      break;
+  }
+
+  const msgId = addMessage("pekacek", bodyMd);
   const msgEl = document.getElementById(msgId);
+
   const btnRow = document.createElement("div");
   btnRow.style.cssText = "margin-top: 8px; display: flex; gap: 6px;";
 
-  const readBtn = document.createElement("button");
-  readBtn.textContent = "Přečti si ho";
-  readBtn.style.cssText = "padding: 5px 12px; border: 1px solid var(--green); border-radius: 5px; background: rgba(78,204,163,0.15); color: var(--green); font-size: 12px; cursor: pointer;";
-  readBtn.addEventListener("click", () => {
-    btnRow.remove();
-    readArticle(title, url);
-  });
+  if (primary) {
+    const primaryBtn = document.createElement("button");
+    primaryBtn.textContent = primary.label;
+    primaryBtn.style.cssText = "padding: 5px 12px; border: 1px solid var(--green); border-radius: 5px; background: rgba(78,204,163,0.15); color: var(--green); font-size: 12px; cursor: pointer;";
+    primaryBtn.addEventListener("click", () => {
+      btnRow.remove();
+      primary.handler();
+    });
+    btnRow.appendChild(primaryBtn);
+  }
 
   const skipBtn = document.createElement("button");
-  skipBtn.textContent = "Přeskoč";
+  skipBtn.textContent = "Necti";
   skipBtn.style.cssText = "padding: 5px 12px; border: 1px solid var(--text-muted); border-radius: 5px; background: transparent; color: var(--text-dim); font-size: 12px; cursor: pointer;";
   skipBtn.addEventListener("click", () => {
-    btnRow.remove();
+    msgEl.remove();
   });
-
-  btnRow.appendChild(readBtn);
   btnRow.appendChild(skipBtn);
+
   msgEl.appendChild(btnRow);
 }
 
@@ -745,7 +885,7 @@ async function offerYouTube(fallbackTitle, url) {
   if (!data || data.__error || data.type !== "youtube") {
     // Content script failed (typicky YouTube ještě načítá) — fallback na obyčejný článek flow
     msgEl.remove();
-    offerToRead(fallbackTitle, url);
+    offerContextHelp("article", fallbackTitle, url);
     return;
   }
 
@@ -769,7 +909,7 @@ async function offerYouTube(fallbackTitle, url) {
     { icon: "📄", label: "Zobraz transcript", title: "Klik = cache, Shift+Klik = force refresh", handler: (e) => showYouTubeTranscript(data, { force: !!e?.shiftKey }), keep: true },
     { icon: "🎬", label: "Film/seriál → přidat na ČSFD watchlist", handler: () => youtubeToWatchlist(data) },
     { icon: "📚", label: "Naučné → ingest do wiki", handler: () => ingestYouTube(data) },
-    { icon: "⏭", label: "Přeskoč", handler: () => {} },
+    { icon: "⏭", label: "Necti", handler: () => {}, dismiss: true },
   ];
 
   for (const a of actions) {
@@ -780,7 +920,11 @@ async function offerYouTube(fallbackTitle, url) {
     btn.addEventListener("mouseenter", () => { btn.style.borderColor = "var(--green)"; btn.style.color = "var(--green)"; });
     btn.addEventListener("mouseleave", () => { btn.style.borderColor = "var(--text-muted)"; btn.style.color = "var(--text)"; });
     btn.addEventListener("click", (e) => {
-      if (!a.keep) btnCol.remove();
+      if (a.dismiss) {
+        msgEl.remove();
+      } else if (!a.keep) {
+        btnCol.remove();
+      }
       a.handler(e);
     });
     btnCol.appendChild(btn);
@@ -1396,7 +1540,7 @@ document.getElementById("quick-menu").addEventListener("click", (e) => {
   sendToBridge(qa.prompt, { action: "quick" });
 });
 
-// --- Keyboard shortcuts (Alt+1..5 = top buttons, Alt+Q = quick menu) ---
+// --- Keyboard shortcuts (Alt+1..6 = top buttons, Alt+Q = quick menu) ---
 document.addEventListener("keydown", (e) => {
   if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
 
@@ -1407,8 +1551,8 @@ document.addEventListener("keydown", (e) => {
     return;
   }
 
-  // Alt+1..5 — top action buttons
-  if (/^[1-5]$/.test(e.key)) {
+  // Alt+1..6 — top action buttons
+  if (/^[1-6]$/.test(e.key)) {
     const btn = document.querySelector(`#actions [data-shortcut="${e.key}"]`);
     if (btn) {
       e.preventDefault();
@@ -1444,6 +1588,7 @@ document.getElementById("actions").addEventListener("click", (e) => {
   const action = btn.dataset.action;
   if (action === "save") return handleSave();
   if (action === "ingest") return handleIngest();
+  if (action === "quiz") return handleQuiz();
 
   // Ensure we have page content (extract if needed)
   ensurePageContent().then((content) => {
@@ -1547,6 +1692,316 @@ async function handleIngest() {
   sendToBridge(prompt, { action: "ingest" });
 }
 
+// --- Quiz (🎯 Otestuj mě) ---
+const BLOOM_LABELS = {
+  recall: "Recall",
+  comprehension: "Porozumění",
+  application: "Aplikace",
+  analysis: "Analýza",
+  synthesis: "Syntéza",
+  evaluation: "Hodnocení",
+};
+
+async function handleQuiz() {
+  if (isWorking) return;
+
+  const content = await ensurePageContent();
+  if (!content || content.__error) {
+    addMessage("pekacek", "Nepodařilo se přečíst stránku — ke kvízu potřebuju její obsah.");
+    tempFace("worried", "animate-error");
+    return;
+  }
+  const text = content.selection || content.text || "";
+  if (text.length < 200) {
+    addMessage("pekacek", "Tahle stránka mi nedává dost obsahu k testování (méně než 200 znaků).");
+    return;
+  }
+
+  addMessage("user", "🎯 Otestuj mě z této stránky");
+
+  isWorking = true;
+  stopIdleLife();
+  setFace("thinking", "animate-thinking");
+
+  const placeholderId = addMessage("pekacek", "", true);
+  const placeholderEl = document.getElementById(placeholderId);
+  const placeholderContent = placeholderEl.querySelector(".message-content");
+  startThinkingMessages("quiz", placeholderContent);
+
+  try {
+    const res = await fetch(`${BRIDGE_URL}/quiz/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        pageContent: text.slice(0, 60000),
+        pageUrl: content.url,
+        pageTitle: content.title,
+      }),
+    });
+    const data = await res.json().catch(() => ({ error: "Bridge nevrátil JSON." }));
+    if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
+    if (!Array.isArray(data.questions) || !data.questions.length) {
+      throw new Error("Žádné otázky v odpovědi.");
+    }
+
+    stopThinkingMessages();
+    removeMessage(placeholderId);
+    setFace("happy", "animate-idle");
+    statusText.textContent = `Kvíz připraven (${data.questions.length} otázek)`;
+    statusText.style.color = "var(--green)";
+
+    renderQuizCard(data, content);
+  } catch (err) {
+    stopThinkingMessages();
+    placeholderContent.classList.remove("loading-dots");
+    const errText = `Chyba kvízu: ${err.message}`;
+    placeholderContent.innerHTML = formatMessage(errText);
+    placeholderEl.dataset.rawText = errText;
+    tempFace("worried", "animate-error");
+    statusText.textContent = "Chyba kvízu";
+    statusText.style.color = "var(--accent)";
+  } finally {
+    isWorking = false;
+  }
+}
+
+function renderQuizCard(quiz, pageContent) {
+  const id = `msg-${++messageCounter}`;
+  const card = document.createElement("div");
+  card.className = "message pekacek quiz-card";
+  card.id = id;
+
+  const state = {
+    quiz,
+    pageContent,
+    answers: new Array(quiz.questions.length).fill(null),
+    current: 0,
+  };
+  card._quizState = state;
+
+  messagesEl.appendChild(card);
+  renderQuizQuestion(card, state);
+  scrollToBottom();
+  return id;
+}
+
+function renderQuizQuestion(card, state) {
+  const q = state.quiz.questions[state.current];
+  const total = state.quiz.questions.length;
+  card.innerHTML = "";
+
+  const header = document.createElement("div");
+  header.className = "quiz-header";
+  header.innerHTML =
+    `<span class="quiz-progress-label">Otázka ${state.current + 1}/${total}</span>` +
+    `<span class="quiz-bloom-tag">${escapeHtml(BLOOM_LABELS[q.bloom] || q.bloom || "")}</span>`;
+  card.appendChild(header);
+
+  const bar = document.createElement("div");
+  bar.className = "quiz-progress-bar";
+  const fill = document.createElement("div");
+  fill.className = "quiz-progress-fill";
+  fill.style.width = `${((state.current + 1) / total) * 100}%`;
+  bar.appendChild(fill);
+  card.appendChild(bar);
+
+  const qEl = document.createElement("div");
+  qEl.className = "quiz-question";
+  qEl.textContent = q.question;
+  card.appendChild(qEl);
+
+  const optsEl = document.createElement("div");
+  optsEl.className = "quiz-options";
+  let selectedLetter = null;
+
+  for (const opt of (q.options || [])) {
+    const optBtn = document.createElement("button");
+    optBtn.className = "quiz-option";
+    optBtn.type = "button";
+    optBtn.textContent = opt;
+    const m = opt.match(/^([A-D])\)/);
+    if (m) optBtn.dataset.letter = m[1];
+    optBtn.addEventListener("click", () => {
+      if (state.answers[state.current] !== null) return;
+      optsEl.querySelectorAll(".quiz-option.selected").forEach((b) => b.classList.remove("selected"));
+      optBtn.classList.add("selected");
+      selectedLetter = optBtn.dataset.letter;
+      submitBtn.disabled = false;
+    });
+    optsEl.appendChild(optBtn);
+  }
+  card.appendChild(optsEl);
+
+  const submitBtn = document.createElement("button");
+  submitBtn.className = "quiz-submit";
+  submitBtn.type = "button";
+  submitBtn.textContent = "Odpovědět";
+  submitBtn.disabled = true;
+  submitBtn.addEventListener("click", () => {
+    if (!selectedLetter || state.answers[state.current] !== null) return;
+    state.answers[state.current] = {
+      letter: selectedLetter,
+      correct: selectedLetter === q.correct,
+    };
+    showQuizFeedback(card, state);
+  });
+  card.appendChild(submitBtn);
+
+  scrollToBottom();
+}
+
+function showQuizFeedback(card, state) {
+  const q = state.quiz.questions[state.current];
+  const ans = state.answers[state.current];
+
+  card.querySelectorAll(".quiz-option").forEach((b) => {
+    b.disabled = true;
+    if (b.dataset.letter === q.correct) b.classList.add("correct");
+    else if (b.dataset.letter === ans.letter) b.classList.add("wrong");
+  });
+
+  card.querySelector(".quiz-submit")?.remove();
+
+  const fb = document.createElement("div");
+  fb.className = "quiz-feedback " + (ans.correct ? "is-correct" : "is-wrong");
+  fb.innerHTML =
+    `<div class="quiz-feedback-head">${ans.correct ? "✓ Správně" : `✗ Špatně — správná odpověď: ${escapeHtml(q.correct)}`}</div>` +
+    `<div class="quiz-feedback-body">${escapeHtml(q.rationale || "")}</div>`;
+  card.appendChild(fb);
+
+  const nextBtn = document.createElement("button");
+  nextBtn.className = "quiz-submit";
+  nextBtn.type = "button";
+  if (state.current < state.quiz.questions.length - 1) {
+    nextBtn.textContent = "Další otázka →";
+    nextBtn.addEventListener("click", () => {
+      state.current++;
+      renderQuizQuestion(card, state);
+    });
+  } else {
+    nextBtn.textContent = "Výsledky →";
+    nextBtn.addEventListener("click", () => renderQuizResults(card, state));
+  }
+  card.appendChild(nextBtn);
+
+  scrollToBottom();
+}
+
+function renderQuizResults(card, state) {
+  card.innerHTML = "";
+  card.classList.add("quiz-results");
+
+  const total = state.quiz.questions.length;
+  const correct = state.answers.filter((a) => a?.correct).length;
+  const pct = (correct / total) * 100;
+
+  const byBloom = {};
+  state.quiz.questions.forEach((q, i) => {
+    const b = q.bloom || "?";
+    if (!byBloom[b]) byBloom[b] = { total: 0, correct: 0 };
+    byBloom[b].total++;
+    if (state.answers[i]?.correct) byBloom[b].correct++;
+  });
+
+  let faceLabel, faceMood;
+  if (pct >= 80) { faceLabel = "(◕‿◕) Skvěle!"; faceMood = "happy"; }
+  else if (pct >= 50) { faceLabel = "( •_• ) Solidní."; faceMood = "thinking"; }
+  else { faceLabel = "(>_<) Pojďme to projet znovu."; faceMood = "worried"; }
+  setFace(faceMood, "animate-idle");
+
+  const head = document.createElement("div");
+  head.className = "quiz-results-head";
+  head.innerHTML =
+    `<div class="quiz-score">${correct}<span class="quiz-score-total">/${total}</span></div>` +
+    `<div class="quiz-face-label">${escapeHtml(faceLabel)}</div>`;
+  card.appendChild(head);
+
+  const blooms = document.createElement("div");
+  blooms.className = "quiz-bloom-breakdown";
+  for (const [b, s] of Object.entries(byBloom)) {
+    const row = document.createElement("div");
+    row.className = "quiz-bloom-row" + (s.correct === s.total ? " full" : (s.correct === 0 ? " empty" : ""));
+    row.innerHTML =
+      `<span class="quiz-bloom-name">${escapeHtml(BLOOM_LABELS[b] || b)}</span>` +
+      `<span class="quiz-bloom-score">${s.correct}/${s.total}${s.correct === s.total ? " ✓" : ""}</span>`;
+    blooms.appendChild(row);
+  }
+  card.appendChild(blooms);
+
+  const summary = document.createElement("div");
+  summary.className = "quiz-summary";
+  summary.textContent = quizSummaryFor(byBloom, pct);
+  card.appendChild(summary);
+
+  const actionsEl = document.createElement("div");
+  actionsEl.className = "quiz-actions";
+
+  const wrongs = state.quiz.questions
+    .map((q, i) => ({ q, ans: state.answers[i], i }))
+    .filter((x) => x.ans && !x.ans.correct);
+
+  const discussBtn = document.createElement("button");
+  discussBtn.className = "quiz-action-btn primary";
+  discussBtn.type = "button";
+  discussBtn.textContent = wrongs.length ? "💬 Pojďme to rozebrat" : "💬 Probrat článek dál";
+  discussBtn.addEventListener("click", () => {
+    let prompt;
+    const titleRef = `"${state.pageContent.title || "(bez názvu)"}"${state.pageContent.url ? ` (${state.pageContent.url})` : ""}`;
+    if (wrongs.length === 0) {
+      prompt =
+        `Právě jsem dokončil kvíz nad článkem ${titleRef} se 100% skóre (${correct}/${total}). ` +
+        `Pojďme se k článku ještě vrátit — co je nejdůležitější / nejvíc překvapivé / co stojí za to si zapamatovat? Stručně, v bodech.`;
+    } else {
+      const parts = wrongs.map(({ q, ans, i }) =>
+        `${i + 1}. (${q.bloom}) ${q.question}\n` +
+        `   Já: ${ans.letter}, správně: ${q.correct}\n` +
+        `   Rationale z kvízu: ${q.rationale || "(žádný)"}`
+      ).join("\n\n");
+      prompt =
+        `Právě jsem dokončil kvíz nad článkem ${titleRef}. Skóre ${correct}/${total}. ` +
+        `Tyhle otázky jsem nezvládl — pomoz mi pochopit jádro toho co mi uteklo:\n\n${parts}\n\n` +
+        `Mluv k podstatě toho co jsem nepochopil. Krátce, srozumitelně, žádná přednáška.`;
+    }
+    addMessage("user", "💬 Pojďme to rozebrat");
+    sendToBridge(prompt, { action: "summarize" });
+  });
+  actionsEl.appendChild(discussBtn);
+
+  const doneBtn = document.createElement("button");
+  doneBtn.className = "quiz-action-btn secondary";
+  doneBtn.type = "button";
+  doneBtn.textContent = "Hotovo";
+  doneBtn.addEventListener("click", () => {
+    statusText.textContent = "Připraveny";
+    statusText.style.color = "";
+    actionsEl.remove();
+  });
+  actionsEl.appendChild(doneBtn);
+
+  card.appendChild(actionsEl);
+
+  card.dataset.rawText =
+    `🎯 Kvíz výsledek: ${correct}/${total} (${Math.round(pct)} %)\n\n` +
+    state.quiz.questions.map((q, i) => {
+      const ans = state.answers[i];
+      return `${i + 1}. [${ans?.correct ? "✓" : "✗"}] (${q.bloom}) ${q.question}\n` +
+        `   Tvá odpověď: ${ans?.letter || "?"} | Správně: ${q.correct}\n` +
+        `   ${q.rationale || ""}`;
+    }).join("\n\n");
+
+  scrollToBottom();
+}
+
+function quizSummaryFor(byBloom, pct) {
+  const weak = Object.entries(byBloom)
+    .filter(([, s]) => s.total > 0 && s.correct < s.total)
+    .map(([b]) => BLOOM_LABELS[b] || b);
+  if (pct === 100) return "Plný počet — pochopení tam je.";
+  if (pct >= 80) return weak.length ? `Skoro dokonalé — slabší: ${weak.join(", ")}.` : "Skoro dokonalé.";
+  if (pct >= 50) return weak.length ? `Solidní základ — dobré projet: ${weak.join(", ")}.` : "Solidní základ.";
+  return weak.length ? `Stálo by za to projet znovu (${weak.join(", ")}).` : "Stálo by za to projet znovu.";
+}
+
 // --- Chat ---
 sendBtn.addEventListener("click", handleUserMessage);
 userInput.addEventListener("keydown", (e) => {
@@ -1589,6 +2044,7 @@ const THINKING_MESSAGES = {
   simplify:   ["Odbourávám žargon...", "Hledám srozumitelná slova...", "Tak aby to pochopil každý...", "Vysvětluju v závorkách..."],
   technical: ["Vytahuju detaily...", "Hledám přesné termíny...", "Edge cases a trade-offs...", "Bez zjednodušování..."],
   ingest:     ["Čtu článek...", "Určuju kategorii...", "Vytvářím stránku...", "Propojuju s wiki..."],
+  quiz:       ["Stavím otázky...", "Bloomova taxonomie...", "Vymýšlím distraktory...", "Připravuju kvíz..."],
   pin:        ["Určuju kategorii...", "Vytvářím stránku...", "Updatuju index...", "Zapisuju do logu..."],
   quick:      ["Koukám...", "Hledám to nejlepší...", "Procházím seznam...", "Zvažuju možnosti..."],
   read:       ["Čtu článek...", "Zpracovávám myšlenky...", "Formuluju názor...", "Hledám zajímavé...", "Skoro hotovo..."],

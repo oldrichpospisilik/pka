@@ -2,6 +2,13 @@
 <html lang="cs">
 <head>
   <meta charset="UTF-8">
+  <script>
+    // Apply stored theme before first paint (no FOUC).
+    try {
+      const t = localStorage.getItem("pekacekTheme");
+      if (t === "light") document.documentElement.dataset.theme = "light";
+    } catch {}
+  </script>
   <link rel="stylesheet" href="sidebar.css">
 </head>
 <body>
@@ -9,6 +16,7 @@
   <div id="pekacek-avatar">
     <button id="history-btn" title="Historie konverzací">&#x1F4DA;</button>
     <button id="reset-btn" title="Nová konverzace (aktuální uložit do historie)">↻</button>
+    <button id="theme-btn" title="Přepnout světlý/tmavý motiv">&#x1F319;</button>
     <div id="pekacek-face" class="animate-idle">
   ( o_o)
   /|___|\
@@ -19,7 +27,10 @@
   <div id="history-panel" class="hidden">
     <div class="history-header">
       <span>&#x1F4DA; Historie konverzací</span>
-      <button id="history-close" title="Zavřít">&#x2715;</button>
+      <div class="history-header-btns">
+        <button id="history-clear" title="Vyčistit celou historii">&#x1F5D1;</button>
+        <button id="history-close" title="Zavřít">&#x2715;</button>
+      </div>
     </div>
     <div id="history-list">—</div>
   </div>
@@ -128,8 +139,11 @@
         </button>
       </div>
     </div>
+    <button class="action-btn action-quiz" data-action="quiz" data-shortcut="5" title="Otestuj mě — kvíz nad stránkou (Alt+5)">
+      <span class="btn-icon">&#x1F3AF;</span> Quiz
+    </button>
     <div class="action-dropdown dropdown-right">
-      <button class="action-btn action-save dropdown-toggle" data-dropdown="save" data-shortcut="5" title="Uložit... (Alt+5)">
+      <button class="action-btn action-save dropdown-toggle" data-dropdown="save" data-shortcut="6" title="Uložit... (Alt+6)">
         <span class="btn-icon">&#x1F4BE;</span> Uložit <span class="caret">▾</span>
       </button>
       <div class="dropdown-menu" id="dropdown-save">

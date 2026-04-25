@@ -5,6 +5,46 @@ Semver: `MAJOR.MINOR.PATCH`.
 - **MINOR** — nové feature, zpětně kompatibilní
 - **PATCH** — bugfixy, drobné úpravy
 
+## 2.14.1 — 2026-04-25
+
+### Změny
+- **Historie konverzací — drobnosti pro přehlednost**:
+  - **„Nová konverzace" archivuje starou jen pokud jsi do ní něco napsal.** Dřív se ukládala i prázdná session, ve které jen Pekáček nabídl přečtení článku — historie pak byla zaplevelená duchy. Teď persist čeká aspoň na jednu user message.
+  - **🗑 Vyčistit celou historii** — nový button v hlavičce history panelu vedle ✕. Smaže všechny uložené konverzace najednou (s confirm prompt).
+  - **Položky historie pojmenované dle stránky.** Hlavní řádek = titulek stránky (z níž jsi se ptal), kurzivní subtitle = tvůj první dotaz, meta = doména · čas · počet zpráv. URL se teď zachycuje hned z `loadTabInfo`, ne až z extrakce obsahu — historie tak ví odkud ses ptal i když jsi obsah stránky vůbec nečetl.
+- **Context-aware greeting** v sidebaru. Pekáček rozezná typ stránky a místo univerzálního „Vidím článek..." nabízí adekvátně:
+  - **Lokální dev** (`localhost`, `127.0.0.1`, `192.168.x`, `*.local`...) → *„Vidím lokální dev. Mám ti pomoct s vývojem? Můžu mrknout na obsah, číst soubory v projektu, hledat v repu, debugovat."*
+  - **`file://`** → *„Vidím soubor: X. Mám si ho přečíst?"* + button [Přečti soubor].
+  - **Gmail** (`mail.google.com`) → *„Vidím Gmail. Chceš pomoct s emailem? Můžu shrnout nepřečtené, navrhnout odpověď, labelovat."*
+  - **Google Calendar** (`calendar.google.com`) → *„Vidím Google Calendar. Co potřebuješ — vytvořit událost, projít agendu, najít volný slot?"*
+  - **Článek** (default) → *„Vidím článek: X. Načtu si ho dopředu? Další akce pak budou rychlejší."* (nová formulace, přímější).
+- **„Přeskoč" → „Necti"** v context offer i v YouTube nabídce. **Klik teď odebere celou bublinu**, ne jen tlačítka — žádná stopa po zamítnuté nabídce.
+
+## 2.14.0 — 2026-04-25
+
+### Nové
+- **🎯 Otestuj mě** (`Alt+5`) — nový action button v sidebaru: vygeneruje **6-otázkový kvíz** nad aktuálně otevřenou stránkou s narůstající obtížností podle Bloomovy taxonomie (recall → comprehension → application → analysis → synthesis → evaluation). Aktivní recall místo pasivního čtení; odhalí mezery, ne známkuje.
+  - **Fáze 1 MVP**: všech 6 otázek je multiple-choice (4 možnosti A/B/C/D). Open-ended typy (Feynman, devil's advocate, vysvětli pětiletému, slabina argumentu) přijdou v Fázi 2.
+  - **Quiz card UI**: 1-by-1 question flow, progress bar `1/6`, Bloom tag, radio-style options s click-to-select. Po Submit feedback panel s rationale (✓ správně / ✗ se správnou odpovědí). Lokální grading (žádný extra LLM call pro MC).
+  - **Final score card**: skóre `X/6`, Pekáček face podle skóre (>80 % `(◕‿◕)`, >50 % `( •_• )`, jinak `(>_<)`), per-Bloom breakdown, jednovětné shrnutí. Tlačítka **💬 Pojďme to rozebrat** (seeded chat se špatně odpovězenými otázkami) a **Hotovo**.
+  - **Bridge endpoint** `POST /quiz/generate` — non-streaming JSON, Claude generuje kvíz dle JSON schématu, validuje 4-options + A-D correct, trim na 18k znaků.
+  - System prompt prosazuje *otázky na pochopení, ne fakta* (žádné „v kterém roce…", žádné „kolik příkladů…") a věrohodné distraktory.
+- **`Alt+6` = Uložit** — Uložit dropdown se posunul z `Alt+5` na `Alt+6`, aby uvolnil 5 kvízu (tak jak to dávno čeká spec).
+
+### Reference
+- Spec: [[lab/pekacek-quiz-z-cetby]] — Fáze 1 dokončena, Fáze 2 (mix 5 forem otázek) a Fáze 3 (hravost & nudges) zatím čekají.
+
+## 2.13.0 — 2026-04-24
+
+### Nové
+- **Light theme skin** (opt-in, persistuje v `localStorage`). Přepínač 🌙/☀ v hlavičce vedle reset/historie tlačítek.
+- **Paleta**: warm bakery cream (`#faf6ed` bg, `#f1e8d4` light, `#e5d5b5` card) s teplou červeno-vínovou akcentovou (`#b83753`), zelenou (`#2f7a5e`) a mustardovou (`#a8811b`). Stíny tónované do hnědé (`rgba(100,80,55,…)`), ne čistě černé. Cílem je cozy pečárna, ne klinická bílá.
+- **Pre-paint theme apply** — inline script v `<head>` přečte `localStorage` a nastaví `data-theme` synchronně, žádný flash při otevření sidebaru.
+- **Persistent napříč zavřením side panelu** — `chrome.storage.local` jako authoritativní storage (localStorage v side panelu se občas pere při zavření/otevření). `localStorage` zůstává jako sync cache pro FOUC-free první paint.
+
+### Změny
+- **CSS refactor pro theming** — všech 30 hardcoded barev (rgba / hex) nahrazeno za CSS variables. Přidány RGB-channel variants (`--bg-rgb`, `--accent-rgb`, `--green-rgb`, `--yellow-rgb`) pro `rgba()` s alfa. Semantické proměnné `--shadow-strong`, `--shadow-soft`, `--overlay-bright`, `--overlay-dark` pro prvky, které by na light verzi jinak dusily. Dark verze beze změny vzhledu.
+
 ## 2.12.0 — 2026-04-24
 
 ### Nové
