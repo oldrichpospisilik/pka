@@ -1165,6 +1165,96 @@ chrome.runtime.onMessage.addListener((msg) => {
   loadTabInfo();
 });
 
+// --- MCP activity log (chat-style, persistent) ---
+// background.js posílá `mcp-activity` zprávy pokaždé, když Claude (přes chrome-bookmarks MCP)
+// sahá do prohlížeče. Vykreslujeme je jako bubliny v logu pod avatarem — Pekáček s ASCII tělem
+// drží v ruce příslušnou rekvizitu (dalekohled, foťák, tužka, …) a má vlastní hlášku.
+// Bubliny zůstávají dokud user neklikne na ✕ nebo nezavře sidebar.
+
+function mcpEsc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]
+  ));
+}
+
+const MCP_ACTIVITY_INFO = {
+  // — Looking (Pekáček s rekvizitou na pozorování) —
+  readPageText:     { emoji: "🔭", msg: ()  => "Mrknul jsem se ti na obsah stránky." },
+  readPageHtml:     { emoji: "🔍", msg: ()  => "Šáhnul jsem si i do zdrojáku." },
+  screenshotActive: { emoji: "📸", msg: ()  => "Cvak — vyfotil jsem si stránku." },
+  getActiveTab:     { emoji: "👀", msg: ()  => "Mrknul jsem, na čem zrovna jsi." },
+  listTabs:         { emoji: "📑", msg: ()  => "Prošel jsem všechny tvé karty." },
+  querySelector:    { emoji: "🔍", msg: (s) => `Hledal jsem prvek${s?.selector ? ` <code>${mcpEsc(s.selector)}</code>` : ""}.` },
+  getFormSchema:    { emoji: "📋", msg: ()  => "Prozkoumal jsem ti, co ten formulář chce." },
+  waitForSelector:  { emoji: "⏳", msg: (s) => `Čekal jsem, až se objeví${s?.selector ? ` <code>${mcpEsc(s.selector)}</code>` : " prvek"}.` },
+  // — Acting —
+  clickElement:     { emoji: "👆", msg: (s) => `Ťukl jsem${s?.selector ? ` na <code>${mcpEsc(s.selector)}</code>` : " na prvek"}.` },
+  fillInput:        { emoji: "✏️", msg: (s) => `Vyplnil jsem políčko${s?.selector ? ` <code>${mcpEsc(s.selector)}</code>` : ""}.` },
+  fillForm:         { emoji: "📝", msg: ()  => "Doplnil jsem formulář." },
+  navigate:         { emoji: "🚀", msg: (s) => `Letím${s?.host ? ` na <code>${mcpEsc(s.host)}</code>` : " na jinou stránku"}.` },
+  openTab:          { emoji: "🪟", msg: (s) => `Otevřel jsem ti novou kartu${s?.host ? ` — <code>${mcpEsc(s.host)}</code>` : ""}.` },
+  focusTab:         { emoji: "🔁", msg: ()  => "Přepnul jsem na jinou kartu." },
+  closeTab:         { emoji: "🚪", msg: ()  => "Zavřel jsem kartu, nashle." },
+  // — Bookmarks (write actions přes extension) —
+  createBookmark:   { emoji: "⭐", msg: (s) => `Uložil jsem záložku${s?.host ? ` — <code>${mcpEsc(s.host)}</code>` : ""}.` },
+  createFolder:     { emoji: "📁", msg: ()  => "Založil jsem ti novou složku v záložkách." },
+  move:             { emoji: "↔️", msg: ()  => "Přesunul jsem záložku jinam." },
+  delete:           { emoji: "🗑️", msg: ()  => "Smazal jsem záložku." },
+  update:           { emoji: "🔧", msg: ()  => "Upravil jsem záložku." },
+  // Pozn.: list_bookmarks / search_bookmarks / find_duplicates jdou přímo přes MCP server
+  // (čtou Bookmarks JSON soubor), do extension nikdy nedorazí — proto tu nejsou.
+};
+
+// Bublina jde rovnou do hlavního #messages chatu jako message.pekacek varianta —
+// vedle běžných odpovědí. Nepersistujeme do historie (není to konverzace, je to status).
+function appendMcpActivity(action, summary) {
+  if (!messagesEl) return;
+
+  const info = MCP_ACTIVITY_INFO[action];
+  const emoji = info?.emoji || "👁";
+
+  // Předhotovit host z URL (pokud přišel) ať msg() funkce nemusí parsovat samy.
+  const s = { ...(summary || {}) };
+  if (s.url) {
+    try { s.host = new URL(s.url).host; } catch {}
+  }
+
+  const html = info?.msg
+    ? info.msg(s)
+    : `Provedl jsem akci <code>${mcpEsc(action)}</code>.`;
+
+  const div = document.createElement("div");
+  div.className = "message pekacek mcp-activity";
+
+  const content = document.createElement("div");
+  content.className = "message-content";
+
+  const face = document.createElement("pre");
+  face.className = "mcp-msg-face";
+  face.textContent = `( o_o)${emoji}\n/|___|\\\n / \\`;
+
+  const body = document.createElement("span");
+  body.className = "mcp-msg-body";
+  body.innerHTML = html; // selector/host jsou escape-nuté přes mcpEsc, action je z whitelistu
+
+  content.appendChild(face);
+  content.appendChild(body);
+  div.appendChild(content);
+
+  messagesEl.appendChild(div);
+
+  // Auto-scroll, pokud je user u dna chatu (existující helper)
+  if (typeof scrollToBottom === "function") scrollToBottom();
+}
+
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg?.type !== "mcp-activity") return;
+  // Logujeme jen na "start". "done" event zůstává, ale neukazujeme ho — bublina už visí.
+  if (msg.status === "start") {
+    appendMcpActivity(msg.action, msg.summary);
+  }
+});
+
 // --- Dropdown toggles ---
 function closeAllDropdowns() {
   document.querySelectorAll(".dropdown-menu.open").forEach((m) => m.classList.remove("open"));

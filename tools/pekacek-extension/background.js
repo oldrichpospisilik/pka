@@ -40,7 +40,13 @@ async function bookmarksLongPoll() {
     const res = await fetch(`${BOOKMARKS_MCP_URL}/poll`);
     if (res.status === 200) {
       const command = await res.json();
-      const result = await executeBookmarksCommand(command);
+      notifyMcpActivity(command, "start");
+      let result;
+      try {
+        result = await executeBookmarksCommand(command);
+      } finally {
+        notifyMcpActivity(command, "done");
+      }
       await fetch(`${BOOKMARKS_MCP_URL}/result`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -55,6 +61,23 @@ async function bookmarksLongPoll() {
 
   bookmarksPolling = false;
   bookmarksLongPoll();
+}
+
+// Broadcast MCP activity to sidebar so it can show "Pekáček dělá X" indicator.
+// Send only minimal summary — full command/result can be huge (screenshots, HTML).
+function notifyMcpActivity(command, status) {
+  if (!command || !command.action) return;
+  try {
+    const summary = {
+      url: command.url,
+      selector: command.selector,
+      tabId: command.tabId,
+    };
+    chrome.runtime.sendMessage(
+      { type: "mcp-activity", action: command.action, status, summary },
+      () => { void chrome.runtime.lastError; /* sidebar not open = OK */ }
+    );
+  } catch {}
 }
 
 async function executeBookmarksCommand(cmd) {

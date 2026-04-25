@@ -5,6 +5,56 @@ Semver: `MAJOR.MINOR.PATCH`.
 - **MINOR** — nové feature, zpětně kompatibilní
 - **PATCH** — bugfixy, drobné úpravy
 
+## 2.16.1 — 2026-04-25
+
+### Změny
+- **MCP activity bubliny → přímo do hlavního chatu.** Místo samostatného logu pod avatarem padají Pekáčkovy status bubliny rovnou do `#messages` jako varianta `.message.pekacek.mcp-activity` — vedle normálních odpovědí.
+- Distinkce: čárkovaný okraj, lehký accent background, italic body, dim text — aby vizuálně dávaly najevo *"toto je status, ne odpověď"*. Žádné copy/pin tlačítka, žádný persist do historie konverzace.
+- Stejné rekvizity / hlášky / ASCII tělo Pekáčka jako v 2.16.0, jen jiné umístění.
+- Reset (↻ Nová konverzace) je vyčistí spolu s ostatními zprávami — díky existujícímu `messagesEl.innerHTML = ""`.
+
+## 2.16.0 — 2026-04-25
+
+### Změny
+- **MCP activity log → chat-style bubliny.** Místo blikajícího banneru, který naskočil a zase zmizel, je teď pod avatarem **persistentní log** s Pekáčkovou ASCII fací držící v ruce příslušnou rekvizitu (dalekohled, foťák, tužka, …) a friendly hláškou:
+  ```
+  ( o_o)🔭        Mrknul jsem se ti na obsah stránky.
+  /|___|\
+   / \
+
+  ( o_o)📸        Cvak — vyfotil jsem si stránku.
+  /|___|\
+   / \
+
+  ( o_o)👆        Ťukl jsem na <code>.btn-primary</code>.
+  /|___|\
+   / \
+  ```
+- 23 různých rekvizit/hlášek (dalekohled na čtení, foťák na screenshot, tužka na fill_input, raketa na navigate, hvězdička na záložku, koš na delete, …). Bubliny se sečou (max 30, oldest pruned), auto-scrollují na nejnovější.
+- **Hlavička logu** s ✕ tlačítkem na vyčištění + skrytí.
+- Selector / host parametry se zobrazí v `<code>` pillu, escape-nuté.
+- Žádné auto-fade, log žije celou session — užitečné pro audit *"co Pekáček vlastně dělal?"*
+
+## 2.15.1 — 2026-04-25
+
+### Bugfix
+- **Kolize ID s existujícím MCP status dotem.** V 2.15.0 jsem nový activity banner pojmenoval `#mcp-status` — jenže to ID už drží connection-status dot k `:3777` (nahoře v sidebar.js). Důsledek: druhá deklarace `const mcpStatusEl` shodila celý sidebar.js (`SyntaxError: Identifier 'mcpStatusEl' has already been declared`) a tím **odstavila všechny features** — nenabízelo se čtení stránky, dashboard nereagoval, status dot u `:3777` zamrzl v default *offline* stavu (odsud "červený ovál").
+- **Fix:** banner přejmenován na `#mcp-activity-banner` + `mcpActivityEl` / `showMcpActivity` / `hideMcpActivity` / `@keyframes mcp-activity-pulse`. Connection-status dot zůstává nedotčený. Žádná kolize.
+
+## 2.15.0 — 2026-04-25
+
+### Nové
+- **MCP activity indicator** — pulzující status banner pod avatarem v sidebaru, který se ukáže pokaždé, kdy Claude (já) sahám do prohlížeče přes `chrome-bookmarks` MCP. Dřív bylo neviditelné, kdy se „něco děje"; teď uvidíš:
+  - *„👁 Pekáček čte stránku…"* (`read_page_text` / `read_page_html`)
+  - *„👁 Pekáček fotí stránku…"* (`screenshot_active_tab`)
+  - *„👁 Pekáček prozkoumává prvky na stránce (.title-h1)…"* (`query_selector`)
+  - *„👁 Pekáček doplňuje formulář…"* (`fill_form` / `fill_input`)
+  - *„👁 Pekáček klepe na prvek…"* (`click_element`)
+  - *„👁 Pekáček otevírá jinou adresu → aistudio.google.com…"* (`navigate_tab` / `open_tab`)
+  - + záložkové akce (prohlíží / ukládá / uklízí), tab inspekce (kouká, co máš otevřené)
+- Implementace: `background.js` po přijetí příkazu z `:3777` long-pollu broadcastuje `chrome.runtime.sendMessage({type:"mcp-activity", status:"start"|"done", action, summary})`. Sidebar listener mapuje akci na český text, drží banner viditelný min. 800 ms (i pro instantní akce typu `getActiveTab`) a pak ho 500 ms fadeuje.
+- Žádný nový permission, žádný hit na výkon — jen extra `sendMessage` per MCP volání.
+
 ## 2.14.1 — 2026-04-25
 
 ### Změny
