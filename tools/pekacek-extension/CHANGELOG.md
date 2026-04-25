@@ -5,6 +5,15 @@ Semver: `MAJOR.MINOR.PATCH`.
 - **MINOR** — nové feature, zpětně kompatibilní
 - **PATCH** — bugfixy, drobné úpravy
 
+## 2.17.4 — 2026-04-25 (bridge-only patch)
+
+### Bugfix
+- **TTS timeout 30 s → 120 s.** Reálná měření v provozu: Gemini Flash TTS generuje cca 2× rychleji než real-time, takže 625-znakový text dělá ~22 s, 1500-znakový text ~50 s, 4000-znakový (cap) ~150 s. 30 s odřízlo i běžné středně dlouhé Pekáčkovy odpovědi → "AbortError" hláška. 120 s pokrývá většinu reálných případů; pro 4000-char extrémy je to stále tight, ale user-friendly.
+- Bridge banner: v2.11.1 → **v2.11.2**.
+
+### Pozn. k UX
+- Pekáčkova odpověď ~800–1500 znaků (typický rozsah) se nyní vygeneruje za ~25–50 s. ⏳ tlačítko visí celou dobu — to je pro user surprising. Pokud bude rušit, řešení do budoucna: streaming chunked TTS nebo progress indikátor.
+
 ## 2.17.3 — 2026-04-25 (bridge-only fix)
 
 ### Bugfix

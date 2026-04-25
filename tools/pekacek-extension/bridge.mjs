@@ -96,7 +96,8 @@ function getArticleStats() {
 // Defaultní hodnoty viz wiki/lab/gemini-3-1-flash-tts.md.
 const TTS_CACHE_DIR = path.join(WORKING_DIR, ".pekacek-tts-cache");
 const TTS_CACHE_MAX = 200;            // počet cached WAVů, oldest pruned (~50 MB)
-const TTS_TIMEOUT_MS = 30_000;
+const TTS_TIMEOUT_MS = 120_000;       // 120 s — Gemini Flash TTS cca real-time generation,
+                                      // takže 4000-char text může trvat ~60–120 s.
 const TTS_DEFAULT_VOICE = "Schedar";
 const TTS_DEFAULT_STYLE = "Empathetic";
 const TTS_DEFAULT_PACE = "Natural";
@@ -1006,7 +1007,7 @@ checkEnvironment();
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`
   ╔══════════════════════════════════════╗
-  ║   Pekáček Bridge v2.11.1            ║
+  ║   Pekáček Bridge v2.11.2            ║
   ║   http://localhost:${PORT}/             ║
   ║                                      ║
   ║   ( o_o) ☕  Čekám na extension...   ║
